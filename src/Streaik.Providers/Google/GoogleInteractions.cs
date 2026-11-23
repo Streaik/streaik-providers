@@ -68,9 +68,13 @@ internal sealed partial class GoogleGeminiProvider
                 model.Tags = [.. (model.Tags ?? []).Where(t => !t.Equals("agent", StringComparison.OrdinalIgnoreCase)
                     && !t.Equals("agents", StringComparison.OrdinalIgnoreCase)), "agent"];
             }
-            if (seenModels.Add((model.Id, model.Type))) yield return model;
-            if (model.Id.Contains("-omni-", StringComparison.OrdinalIgnoreCase) && seenModels.Add((model.Id, "video")))
-                yield return new Model { Id = model.Id, Name = model.Name + " Video", OwnedBy = model.OwnedBy, Type = "video" };
+            // Build both rows before the gateway can qualify the ID of the yielded model in place.
+            var listModel = seenModels.Add((model.Id, model.Type));
+            var video = model.Id.Contains("-omni-", StringComparison.OrdinalIgnoreCase) && seenModels.Add((model.Id, "video"))
+                ? new Model { Id = model.Id, Name = model.Name + " Video", OwnedBy = model.OwnedBy, Type = "video" }
+                : null;
+            if (listModel) yield return model;
+            if (video is not null) yield return video;
         }
 
         var seen = new HashSet<string>(StringComparer.Ordinal);
