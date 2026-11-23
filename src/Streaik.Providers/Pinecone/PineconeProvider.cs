@@ -57,9 +57,9 @@ internal sealed class PineconeProvider(IHttpClientFactory clients, IProviderCred
         if (inputs.Length == 0 || inputs.Any(item => item.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(item.GetString())))
             throw new ProviderRequestException("Pinecone embeddings require a non-empty string or an array of non-empty strings.");
 
-        var options = request.AdditionalProperties?.Where(pair => pair.Value.ValueKind != JsonValueKind.Null)
-            .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase)
-            ?? new Dictionary<string, JsonElement>(StringComparer.OrdinalIgnoreCase);
+        var options = new Dictionary<string, JsonElement>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (name, value) in request.AdditionalProperties ?? [])
+            if (value.ValueKind != JsonValueKind.Null) options[name] = value;
         var parameters = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
         if (options.Remove("parameters", out var raw))
         {
@@ -98,8 +98,9 @@ internal sealed class PineconeProvider(IHttpClientFactory clients, IProviderCred
         if (request.ProviderOptions?.TryGetValue(Id, out var options) == true && options.ValueKind != JsonValueKind.Null)
         {
             if (options.ValueKind != JsonValueKind.Object) throw new ProviderRequestException("Pinecone provider options must be an object.");
-            foreach (var (name, value) in options.EnumerateObject().Select(field => (field.Name, field.Value)))
+            foreach (var field in options.EnumerateObject())
             {
+                var (name, value) = (field.Name, field.Value);
                 var normalized = name.ToLowerInvariant();
                 if (normalized is "model" or "query" or "documents" or "top_n" or "topn") continue;
                 if (normalized is "return_documents" or "rank_fields" or "parameters")
