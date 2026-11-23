@@ -3,15 +3,18 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Streaik.OpenAI.Models;
 using Streaik.Vercel.Models;
 using static Streaik.Providers.MediaHttp;
 
 namespace Streaik.Providers;
 
-internal sealed partial class GoogleGeminiProvider(IHttpClientFactory clients, IProviderCredentials credentials)
+internal sealed partial class GoogleGeminiProvider(IHttpClientFactory clients, IProviderCredentials credentials, ILogger<GoogleGeminiProvider> logger)
     : CompatibleChatProvider(clients, credentials, "google", "v1beta/openai/"), IRealtimeTokenProvider
 {
+    private readonly ILogger<GoogleGeminiProvider> _logger = logger;
+
     internal static bool IsLiveTranscriptionModel(string model) => model == "gemini-3.5-transcribe-live";
 
     internal static bool IsLiveModel(string model) => model.StartsWith("gemini-", StringComparison.Ordinal) && !model.Contains('/')

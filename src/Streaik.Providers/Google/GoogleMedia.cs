@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
 using Streaik.OpenAI.Models;
 using Streaik.Vercel.Models;
 using static Streaik.Providers.MediaHttp;
@@ -61,9 +62,43 @@ internal sealed partial class GoogleGeminiProvider : IEmbeddingsProvider, IImage
 
     private async Task<OpenAIImagesResponse> GeminiImageAsync(string model, JsonArray input, JsonObject format, CancellationToken ct)
     {
-        var result = await RunInteractionAsync(new() { ["model"] = model, ["input"] = input, ["response_format"] = format, ["store"] = false }, ct);
+        var body = new JsonObject { ["model"] = model, ["input"] = input, ["response_format"] = format, ["store"] = false };
+        var key = ApiKey();
+        using var client = CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, InteractionsPath) { Content = JsonContent.Create(body, options: Json) };
+        GoogleAuth(key, revision: true)(request.Headers);
+        request.Headers.Accept.ParseAdd("application/json");
+        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+        if (!response.IsSuccessStatusCode && _logger.IsEnabled(LogLevel.Debug))
+            await LogGeminiImageRejectionAsync(response, model, key, ct);
+        response.EnsureSuccessStatusCode();
+        var result = await NativeHttp.ReadAsync<JsonElement>(response, Json, ct);
         return ImageResult(OutputParts(result).Where(x => String(x, "type") == "image").Select(x => String(x, "data")),
             OutputParts(result).Where(x => String(x, "type") == "image").Select(x => String(x, "mime_type")).FirstOrDefault() ?? format["mime_type"]!.ToString());
+    }
+
+    private async Task LogGeminiImageRejectionAsync(HttpResponseMessage response, string model, string key, CancellationToken ct)
+    {
+        const int maxErrorBytes = 8192;
+        var detail = "No readable Google error message.";
+        try
+        {
+            // Error bodies are untrusted. Read a bounded Google error envelope, never the raw body or the request.
+            var buffer = new byte[maxErrorBytes + 1];
+            await using var stream = await response.Content.ReadAsStreamAsync(ct);
+            var length = await stream.ReadAtLeastAsync(buffer, buffer.Length, false, ct);
+            if (length is > 0 and <= maxErrorBytes)
+            {
+                using var document = JsonDocument.Parse(buffer.AsMemory(0, length));
+                if (String(Property(document.RootElement, "error"), "message") is { Length: > 0 } message)
+                {
+                    message = message.Replace(key, "[redacted]", StringComparison.Ordinal);
+                    detail = new string(message.Take(1024).Select(c => char.IsControl(c) ? ' ' : c).ToArray());
+                }
+            }
+        }
+        catch (Exception error) when (error is JsonException or IOException or HttpRequestException) { /* Preserve the original HTTP status. */ }
+        _logger.LogDebug("Gemini image request for {Model} rejected (HTTP {Status}): {Detail}", model, (int)response.StatusCode, detail);
     }
 
     private static OpenAIImagesResponse ImageResult(IEnumerable<string?> values, string mime)
