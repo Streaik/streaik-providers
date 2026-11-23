@@ -62,6 +62,7 @@ internal sealed class RecraftProvider(IHttpClientFactory clients, IProviderCrede
         var fields = Fields(request.AdditionalProperties, allowStrength: false);
         fields["model"] = request.Model;
         fields["prompt"] = request.Prompt;
+        if (request.Style is { } style) fields["style"] = style;
         if (request.N is { } count) fields["n"] = count;
         if (request.Size is { } size) fields["size"] = size;
         fields["response_format"] = "url";
@@ -181,7 +182,7 @@ internal sealed class RecraftProvider(IHttpClientFactory clients, IProviderCrede
 
         var extensions = new Dictionary<string, JsonElement>
         {
-            ["providerMetadata"] = JsonSerializer.SerializeToElement(new Dictionary<string, object?> { [Id] = SafeMetadata(root) }, Json)
+            ["providerMetadata"] = JsonSerializer.SerializeToElement(new Dictionary<string, object?> { [Id] = SafeMetadata(root, response: true) }, Json)
         };
         if (warnings.Count > 0) extensions["warnings"] = JsonSerializer.SerializeToElement(warnings, Json);
         var created = Property(root, "created");
@@ -239,14 +240,14 @@ internal sealed class RecraftProvider(IHttpClientFactory clients, IProviderCrede
     };
     private static string Mime(string format) => format == "svg" ? "image/svg+xml" : $"image/{format}";
 
-    private static JsonNode? SafeMetadata(JsonElement value) => value.ValueKind switch
+    private static JsonNode? SafeMetadata(JsonElement value, bool response = false) => value.ValueKind switch
     {
         JsonValueKind.Object => new JsonObject(value.EnumerateObject()
             .Where(field => !SensitiveField(field.Name) && !(field.Name == "image" && field.Value.ValueKind == JsonValueKind.String))
-            .Select(field => KeyValuePair.Create(field.Name, field.Name == "data" && field.Value.ValueKind == JsonValueKind.Array
+            .Select(field => KeyValuePair.Create(field.Name, response && field.Name == "data" && field.Value.ValueKind == JsonValueKind.Array
                 ? new JsonArray(field.Value.EnumerateArray().Select(item => item.ValueKind == JsonValueKind.String ? null : SafeMetadata(item)).ToArray())
                 : SafeMetadata(field.Value)))),
-        JsonValueKind.Array => new JsonArray(value.EnumerateArray().Select(SafeMetadata).ToArray()),
+        JsonValueKind.Array => new JsonArray(value.EnumerateArray().Select(item => SafeMetadata(item)).ToArray()),
         JsonValueKind.String when value.GetString() is { } text && (text.StartsWith("data:", StringComparison.OrdinalIgnoreCase)
             || Uri.TryCreate(text, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https" && (uri.Query.Length > 0 || uri.UserInfo.Length > 0)) => null,
         _ => Copy(value)
