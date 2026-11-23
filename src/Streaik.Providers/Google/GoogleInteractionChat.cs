@@ -19,7 +19,7 @@ internal sealed partial class GoogleGeminiProvider : IChatBridgeProvider
             => provider.CompleteInteractionChatAsync(request, ct);
 
         public IAsyncEnumerable<ChatCompletionUpdate> StreamChatAsync(ChatCompletionOptions request, IReadOnlyDictionary<string, string> headers, CancellationToken ct)
-            => provider.StreamInteractionChatAsync(request, ct);
+            => provider.StreamInteractionChatAsync(request, includeUsage: true, ct);
     }
 
     public override Task<ChatCompletion> CompleteChatAsync(ChatCompletionOptions request, IReadOnlyDictionary<string, string> headers, CancellationToken ct)
@@ -27,7 +27,9 @@ internal sealed partial class GoogleGeminiProvider : IChatBridgeProvider
 
     public override IAsyncEnumerable<ChatCompletionUpdate> StreamChatAsync(ChatCompletionOptions request,
         IReadOnlyDictionary<string, string> headers, CancellationToken ct)
-        => GoogleModelIds.IsAgent(request.Model) ? StreamInteractionChatAsync(request, ct) : base.StreamChatAsync(request, headers, ct);
+        => GoogleModelIds.IsAgent(request.Model)
+            ? StreamInteractionChatAsync(request, request.StreamOptions?.IncludeUsage == true, ct)
+            : base.StreamChatAsync(request, headers, ct);
 
     private async Task<ChatCompletion> CompleteInteractionChatAsync(ChatCompletionOptions request, CancellationToken ct)
     {
@@ -41,14 +43,15 @@ internal sealed partial class GoogleGeminiProvider : IChatBridgeProvider
             result = await WaitForChatAsync(result, id, body.Store == true, ct);
             var calls = FunctionSteps(result).Select(FunctionCall).ToArray();
             return new ChatCompletion { Id = "chatcmpl-" + Guid.NewGuid().ToString("N"), Model = request.Model,
-                Created = DateTimeOffset.UtcNow.ToUnixTimeSeconds(), Usage = InteractionUsage(result),
+                Created = DateTimeOffset.UtcNow.ToUnixTimeSeconds(), Usage = ParseInteractionUsage(Property(result, "usage")),
                 Choices = [new() { Index = 0, FinishReason = FinishReason(result, calls.Length), Message = new()
                     { Content = ChatText(result), ToolCalls = calls.Length > 0 ? calls : null } }] };
         }
         finally { if (body.Store == true) await CleanUpAgentRunAsync(id); }
     }
 
-    private async IAsyncEnumerable<ChatCompletionUpdate> StreamInteractionChatAsync(ChatCompletionOptions request, [EnumeratorCancellation] CancellationToken ct)
+    private async IAsyncEnumerable<ChatCompletionUpdate> StreamInteractionChatAsync(ChatCompletionOptions request, bool includeUsage,
+        [EnumeratorCancellation] CancellationToken ct)
     {
         var body = ChatInteraction(request, true);
         var completionId = "chatcmpl-" + Guid.NewGuid().ToString("N");
@@ -58,7 +61,7 @@ internal sealed partial class GoogleGeminiProvider : IChatBridgeProvider
         var accumulated = new StringBuilder();
         var functionSteps = new SortedDictionary<int, JsonObject>();
         var functionArgs = new Dictionary<int, StringBuilder>();
-        var usageFromStream = default(JsonElement);
+        ChatCompletionUsage? usageFromStream = null;
         try
         {
             using (var response = await CreateInteractionAsync(body, ct))
@@ -79,6 +82,9 @@ internal sealed partial class GoogleGeminiProvider : IChatBridgeProvider
                             result = interaction;
                             id ??= String(interaction, "id");
                         }
+                        // total_usage is cumulative, and can arrive on events without a step index.
+                        if (includeUsage)
+                            usageFromStream = ParseInteractionUsage(Property(Property(item, "metadata"), "total_usage")) ?? usageFromStream;
                         var delta = Property(item, "delta");
                         var index = Property(item, "index");
                         if (index.ValueKind == JsonValueKind.Number && index.TryGetInt32(out var stepIndex))
@@ -97,8 +103,6 @@ internal sealed partial class GoogleGeminiProvider : IChatBridgeProvider
                                     buffer.Append(args.GetString());
                                 }
                             }
-                            var eventUsage = Property(Property(item, "metadata"), "total_usage");
-                            if (eventUsage.ValueKind == JsonValueKind.Object) usageFromStream = eventUsage;
                         }
                         if (type == "step.delta" && String(delta, "type") == "text" && String(delta, "text") is { Length: > 0 } text)
                         {
@@ -130,7 +134,7 @@ internal sealed partial class GoogleGeminiProvider : IChatBridgeProvider
             }
             yield return new ChatCompletionUpdate { Id = completionId, Created = created, Model = request.Model,
                 Choices = [new() { Index = 0, Delta = new(), FinishReason = FinishReason(result, calls.Count) }] };
-            if (request.StreamOptions?.IncludeUsage == true && InteractionUsage(result, usageFromStream) is { } usage)
+            if (includeUsage && (ParseInteractionUsage(Property(result, "usage")) ?? usageFromStream) is { } usage)
                 yield return new ChatCompletionUpdate { Id = completionId, Created = created, Model = request.Model, Usage = usage };
         }
         finally { if (body.Store == true) await CleanUpAgentRunAsync(id); }
@@ -327,14 +331,25 @@ internal sealed partial class GoogleGeminiProvider : IChatBridgeProvider
 
     private static ProviderRequestException InteractionFailed() => new("The Google request did not complete successfully.", 502);
 
-    private static ChatCompletionUsage? InteractionUsage(JsonElement result, JsonElement streamUsage = default)
+    private static ChatCompletionUsage? ParseInteractionUsage(JsonElement usage)
     {
-        var usage = Property(result, "usage");
-        if (usage.ValueKind != JsonValueKind.Object) usage = streamUsage;
-        if (usage.ValueKind != JsonValueKind.Object) return null;
-        int Tokens(string key) => Property(usage, key) is { ValueKind: JsonValueKind.Number } value && value.TryGetInt32(out var n) ? n : 0;
-        return new() { PromptTokens = Tokens("total_input_tokens"), CompletionTokens = Tokens("total_output_tokens"), TotalTokens = Tokens("total_tokens"),
-            PromptTokensDetails = new() { CachedTokens = Tokens("total_cached_tokens") },
-            CompletionTokensDetails = new() { ReasoningTokens = Tokens("total_thought_tokens") } };
+        if (Tokens("total_input_tokens") is not { } input || Tokens("total_output_tokens") is not { } output) return null;
+        var cached = Tokens("total_cached_tokens");
+        var thoughts = Tokens("total_thought_tokens");
+        var toolInput = Tokens("total_tool_use_tokens") ?? 0;
+        var reportedTotal = Tokens("total_tokens");
+        if (input < 0 || output < 0 || cached < 0 || cached > input || thoughts < 0 || toolInput < 0 || reportedTotal < 0) return null;
+
+        // Interactions reports tool prompts and thoughts separately. In the chat contracts,
+        // input includes tool prompts and cached input, and output includes reasoning.
+        var prompt = (long)input + toolInput;
+        var completion = (long)output + (thoughts ?? 0);
+        var total = prompt + completion;
+        if (total > int.MaxValue) return null;
+        return new() { PromptTokens = (int)prompt, CompletionTokens = (int)completion, TotalTokens = reportedTotal ?? (int)total,
+            PromptTokensDetails = cached.HasValue ? new() { CachedTokens = cached } : null,
+            CompletionTokensDetails = thoughts.HasValue ? new() { ReasoningTokens = thoughts } : null };
+
+        int? Tokens(string key) => Property(usage, key) is { ValueKind: JsonValueKind.Number } value && value.TryGetInt32(out var count) ? count : null;
     }
 }
