@@ -26,6 +26,7 @@ internal sealed class JinaProvider(IHttpClientFactory clients, IProviderCredenti
     public override async IAsyncEnumerable<Model> ListModelsAsync([EnumeratorCancellation] CancellationToken ct)
     {
         await Task.CompletedTask;
+        ct.ThrowIfCancellationRequested();
         yield return new() { Id = "jina-deepsearch-v1", Name = "jina-deepsearch-v1", OwnedBy = "Jina", Type = "model", Created = 1740787200 };
         foreach (var id in new[] { "jina-reranker-v3", "jina-reranker-m0", "jina-colbert-v2", "jina-reranker-v2-base-multilingual",
             "jina-reranker-v1-tiny-en", "jina-reranker-v1-turbo-en", "jina-reranker-v1-base-en", "jina-colbert-v1-en" })
@@ -67,7 +68,7 @@ internal sealed class JinaProvider(IHttpClientFactory clients, IProviderCredenti
         if (request.Dimensions is { } dimensions) payload["dimensions"] = dimensions;
         if (encoding is not null) payload["embedding_type"] = encoding;
 
-        using var client = clients.CreateClient(SearchClient);
+        using var client = CreateClient(SearchClient);
         var (root, responseHeaders) = await NativeHttp.PostJsonAsync(client, "embeddings", payload, Bearer(ApiKey()), headers, Json, ct);
         var data = Items(root, "data").Select((item, index) => new OpenAIEmbeddingData
         {
@@ -109,7 +110,7 @@ internal sealed class JinaProvider(IHttpClientFactory clients, IProviderCredenti
             }
         }
 
-        using var client = clients.CreateClient(SearchClient);
+        using var client = CreateClient(SearchClient);
         var (root, responseHeaders) = await NativeHttp.PostJsonAsync(client, "rerank", payload, Bearer(ApiKey()), headers, Json, ct);
         var usage = Property(root, "usage");
         return new()

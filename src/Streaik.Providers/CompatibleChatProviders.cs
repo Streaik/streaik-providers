@@ -55,7 +55,7 @@ public static class CompatibleChatProviderRegistration
 internal abstract class CompatibleChatProvider(IHttpClientFactory clients, IProviderCredentials credentials, string id, string chatPrefix = "")
     : IChatCompletionsProvider, IModelListingProvider
 {
-    protected HttpClient CreateClient() => clients.CreateClient(id);
+    protected HttpClient CreateClient(string? name = null) => clients.CreateClient(name ?? id);
     protected string ApiKey() => RequiredKey(credentials, id);
     protected string? ConfiguredApiKey() => credentials.GetApiKey(id);
 
