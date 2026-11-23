@@ -22,6 +22,9 @@ public static class CompatibleChatProviderRegistration
     public static IServiceCollection AddCerebras(this IServiceCollection services)
         => Add<Cerebras>(services, "cerebras", "https://api.cerebras.ai/v1/");
 
+    public static IServiceCollection AddMoonshot(this IServiceCollection services)
+        => Add<Moonshot>(services, "moonshot", "https://api.moonshot.ai/v1/");
+
     public static IServiceCollection AddGoogle(this IServiceCollection services)
         => Add<GoogleGeminiProvider>(services, "google", "https://generativelanguage.googleapis.com/");
 
@@ -38,6 +41,15 @@ public static class CompatibleChatProviderRegistration
     private sealed class Groq(IHttpClientFactory clients, IProviderCredentials credentials) : CompatibleChatProvider(clients, credentials, "groq");
     private sealed class Together(IHttpClientFactory clients, IProviderCredentials credentials) : CompatibleChatProvider(clients, credentials, "together");
     private sealed class Cerebras(IHttpClientFactory clients, IProviderCredentials credentials) : CompatibleChatProvider(clients, credentials, "cerebras");
+    private sealed class Moonshot(IHttpClientFactory clients, IProviderCredentials credentials)
+        : CompatibleChatProvider(clients, credentials, "moonshot"), INativeChatOptionsProvider
+    {
+        protected override ModelPricing? Pricing(JsonElement model)
+            => Property(model, "pricing") is { ValueKind: JsonValueKind.Object } pricing
+                && Property(pricing, "input").ValueKind is JsonValueKind.Number or JsonValueKind.String
+                && Property(pricing, "output").ValueKind is JsonValueKind.Number or JsonValueKind.String
+                    ? pricing.Deserialize<ModelPricing>(Json) : null;
+    }
 }
 
 internal abstract class CompatibleChatProvider(IHttpClientFactory clients, IProviderCredentials credentials, string id, string chatPrefix = "")
@@ -97,9 +109,11 @@ internal abstract class CompatibleChatProvider(IHttpClientFactory clients, IProv
                 Type = type ?? (live ? "audio" : "model"), OwnedBy = String(item, "owned_by") ?? String(item, "organization") ?? id,
                 Tags = Array(Property(item, "tags")).Where(tag => tag.ValueKind == JsonValueKind.String)
                     .Select(tag => tag.GetString()!).Concat(live ? ["realtime"] : []).ToArray(),
-                ContextWindow = context.ValueKind == JsonValueKind.Number && context.TryGetInt32(out var size) ? size : null };
+                ContextWindow = context.ValueKind == JsonValueKind.Number && context.TryGetInt32(out var size) ? size : null,
+                Pricing = Pricing(item) };
         }
     }
 
-    private static Action<HttpRequestHeaders> Bearer(string key) => headers => headers.Authorization = new("Bearer", key);
+    protected virtual ModelPricing? Pricing(JsonElement model) => null;
+    protected static Action<HttpRequestHeaders> Bearer(string key) => headers => headers.Authorization = new("Bearer", key);
 }
