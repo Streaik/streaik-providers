@@ -70,14 +70,18 @@ public sealed partial class OpenAIProvider
             foreach (var item in options.Where(x => x.Key is not ("file" or "model" or "stream" or "language" or "response_format")))
                 form.Add(new StringContent(item.Value.ValueKind == JsonValueKind.String ? item.Value.GetString()! : item.Value.GetRawText()), item.Key);
         form.Add(new StringContent(model), "model");
-        form.Add(new StringContent(model == "whisper-1" ? "verbose_json" : "json"), "response_format");
+        var diarized = model.Contains("transcribe-diarize", StringComparison.Ordinal);
+        form.Add(new StringContent(diarized ? "diarized_json" : model == "whisper-1" ? "verbose_json" : "json"), "response_format");
+        if (diarized && options?.ContainsKey("chunking_strategy") != true) form.Add(new StringContent("auto"), "chunking_strategy");
         if (!string.IsNullOrWhiteSpace(language)) form.Add(new StringContent(language), "language");
         AddFile(form, "file", audio, mediaType, fileName);
         var root = await JsonAsync<JsonElement>(client, HttpMethod.Post, "v1/audio/transcriptions", form, "Bearer", key, headers, ct);
-        var segments = Array(Property(root, "segments")).Select(x => new TranscriptionSegment { Text = String(x, "text") ?? "",
+        var nativeSegments = Array(Property(root, "segments")).ToArray();
+        var segments = nativeSegments.Select(x => new TranscriptionSegment { Text = String(x, "text") ?? "",
             StartSecond = Number(x, "start") ?? 0, EndSecond = Number(x, "end") ?? 0 });
         return new() { Text = String(root, "text") ?? throw new JsonException("Missing transcription text."), Language = String(root, "language"),
-            DurationInSeconds = Number(root, "duration"), Segments = segments.ToArray() };
+            DurationInSeconds = Number(root, "duration"), Segments = segments.ToArray(),
+            ProviderMetadata = diarized ? new() { [Id] = JsonSerializer.SerializeToElement(new { segments = nativeSegments }, Json) } : null };
     }
 
     public async Task<HttpResponseMessage> TranscribeNativeAsync(string model, IFormCollection request, IReadOnlyDictionary<string, string> headers, CancellationToken ct)
@@ -100,7 +104,8 @@ public sealed partial class OpenAIProvider
         {
             "mp3" or "audio/mpeg" => ("mp3", "audio/mpeg"), "wav" or "audio/wav" => ("wav", "audio/wav"),
             "webm" or "audio/webm" => ("webm", "audio/webm"), "flac" or "audio/flac" => ("flac", "audio/flac"),
-            "mp4" or "audio/mp4" or "m4a" => ("m4a", "audio/mp4"), _ => throw new ProviderRequestException("Unsupported OpenAI transcription audio format.", 415)
+            "mp4" or "audio/mp4" or "m4a" => ("m4a", "audio/mp4"), "ogg" or "audio/ogg" => ("ogg", "audio/ogg"),
+            _ => throw new ProviderRequestException("Unsupported OpenAI transcription audio format.", 415)
         };
         byte[] bytes;
         try { bytes = Convert.FromBase64String(request.Audio); }

@@ -119,7 +119,7 @@ internal sealed class GladiaProvider(IHttpClientFactory clients, IProviderCreden
         var key = RequiredKey(credentials, Id);
         var response = await SendJsonAsync(client, HttpMethod.Post, "v2/live", JsonContent.Create(payload, options: Json), key, ct);
         var url = RealtimeOptions.Required(response, "url", key);
-        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != "wss" || uri.UserInfo.Length > 0
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != "wss" || uri.UserInfo.Length > 0 || !uri.IsDefaultPort || uri.Fragment.Length > 0
             || !(uri.Host == "gladia.io" || uri.Host.EndsWith(".gladia.io", StringComparison.OrdinalIgnoreCase)))
             throw new JsonException("Invalid Gladia WebSocket URL.");
         return new() { Token = RealtimeOptions.Required(response, "id", key), Url = url };
