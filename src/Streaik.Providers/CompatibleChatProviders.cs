@@ -81,7 +81,13 @@ internal abstract class CompatibleChatProvider(IHttpClientFactory clients, IProv
         foreach (var item in Array(result.ValueKind == JsonValueKind.Array ? result : Property(result, "data")))
         {
             if (String(item, "id") is not { Length: > 0 } model || Property(item, "active").ValueKind == JsonValueKind.False) continue;
-            if (id == "google" && model.StartsWith("models/", StringComparison.Ordinal)) model = model[7..];
+            if (id == "google")
+            {
+                // Return the native ID; the gateway adds its own routing prefix.
+                if (model.StartsWith("models/", StringComparison.Ordinal)) model = model[7..];
+                if (model.StartsWith("google/", StringComparison.Ordinal)) model = model[7..];
+                if (model.Length == 0) continue;
+            }
             var live = id == "google" && GoogleGeminiProvider.IsLiveModel(model)
                 || id == "xai" && model == XaiProvider.RealtimeModel;
             var type = String(item, "type");
