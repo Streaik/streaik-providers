@@ -112,7 +112,7 @@ internal sealed partial class BlackForestLabsProvider(IHttpClientFactory clients
             mime = header[0];
             value = value[(comma + 1)..];
         }
-        if (value.Length > ((long)limit + 2) / 3 * 4 || string.IsNullOrWhiteSpace(value) || !Convert.IsBase64String(value))
+        if (value.Length > ((long)limit + 2) / 3 * 4 || !System.Buffers.Text.Base64.IsValid(value, out var bytes) || bytes == 0 || bytes > limit)
             throw new IOException("Black Forest Labs returned invalid or oversized inline media.");
         return (value, mime);
     }
