@@ -60,6 +60,7 @@ internal sealed partial class GoogleGeminiProvider
         await foreach (var model in source.WithCancellation(ct))
         {
             if (model.Id == "gemini-omni-flash-preview") continue;
+            if (IsLiveTranscriptionModel(model.Id)) model.Type = "transcription";
             if (GoogleModelIds.IsAgent(model.Id) || model.Type is "agent" or "agents")
             {
                 if (!GoogleModelIds.IsAgent(model.Id)) model.Id = "agents/" + model.Id;
@@ -137,6 +138,7 @@ internal sealed partial class GoogleGeminiProvider
     private static string GoogleModelType(string id, JsonElement entry)
     {
         if (GoogleModelIds.IsAgent(id)) return "language";
+        if (IsLiveTranscriptionModel(id)) return "transcription";
         if (IsLiveModel(id)) return "audio";
         var methods = Array(Property(entry, "supportedGenerationMethods")).Where(x => x.ValueKind == JsonValueKind.String).Select(x => x.GetString()).ToHashSet();
         if (id.StartsWith("gemini-decision-", StringComparison.OrdinalIgnoreCase)) return "decision";

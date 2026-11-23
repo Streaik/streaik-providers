@@ -12,6 +12,8 @@ namespace Streaik.Providers;
 internal sealed partial class GoogleGeminiProvider(IHttpClientFactory clients, IProviderCredentials credentials)
     : CompatibleChatProvider(clients, credentials, "google", "v1beta/openai/"), IRealtimeTokenProvider
 {
+    internal static bool IsLiveTranscriptionModel(string model) => model == "gemini-3.5-transcribe-live";
+
     internal static bool IsLiveModel(string model) => model.StartsWith("gemini-", StringComparison.Ordinal) && !model.Contains('/')
         && (model.Contains("-live", StringComparison.Ordinal) || model.Contains("-native-audio", StringComparison.Ordinal));
 
@@ -35,11 +37,13 @@ internal sealed partial class GoogleGeminiProvider(IHttpClientFactory clients, I
             throw new ProviderRequestException("Gemini Live expireTime must be within the next 30 minutes.", 400);
         var key = ApiKey();
         using var client = CreateClient();
-        var result = await NativeHttp.PostAsync<JsonObject, JsonElement>(client, "v1alpha/auth_tokens", payload,
+        // Live Transcribe is documented on v1beta. Leave the existing voice-model routes on v1alpha.
+        var version = IsLiveTranscriptionModel(native[7..]) ? "v1beta" : "v1alpha";
+        var result = await NativeHttp.PostAsync<JsonObject, JsonElement>(client, $"{version}/auth_tokens", payload,
             outgoing => outgoing.Add("x-goog-api-key", key), headers, Json, ct);
         return new() { Token = RealtimeOptions.Required(result, "name", key),
             ExpiresAt = (RealtimeOptions.ReadDate(String(result, "expireTime")) ?? requestedExpiry)?.ToUnixTimeSeconds(),
-            Url = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContentConstrained" };
+            Url = $"wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.{version}.GenerativeService.BidiGenerateContentConstrained" };
     }
 }
 

@@ -113,6 +113,8 @@ internal sealed partial class GoogleGeminiProvider : IEmbeddingsProvider, IImage
     public async Task<TranscriptionResponse> TranscribeAsync(string model, Stream audio, string mediaType, string fileName,
         string? language, IReadOnlyDictionary<string, JsonElement>? options, IReadOnlyDictionary<string, string> headers, CancellationToken ct)
     {
+        var native = NormalizeModel(model);
+        if (IsLiveTranscriptionModel(native)) throw new ProviderRequestException("This Google transcription model requires a Real-time session.", 422);
         if (!mediaType.StartsWith("audio/", StringComparison.OrdinalIgnoreCase)) throw new ProviderRequestException("Gemini transcription requires audio.", 422);
         var prompt = "Generate a transcript of the speech. Do not include any other text.";
         if (!string.IsNullOrWhiteSpace(language)) prompt += " The expected spoken language is " + language + ".";
@@ -121,7 +123,7 @@ internal sealed partial class GoogleGeminiProvider : IEmbeddingsProvider, IImage
         if (options is not null)
             foreach (var (name, value) in options)
                 if (name is "generation_config" or "service_tier") body[name] = Copy(value);
-        body["model"] = NormalizeModel(model);
+        body["model"] = native;
         body["input"] = new JsonArray(TextPart(prompt), new JsonObject { ["type"] = "audio", ["mime_type"] = mediaType,
             ["data"] = await BoundedBase64Async(audio, InlineLimit, ct) });
         body["store"] = false;
