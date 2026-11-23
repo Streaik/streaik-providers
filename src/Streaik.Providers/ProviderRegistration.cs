@@ -24,6 +24,7 @@ public static class ProviderServiceCollectionExtensions
         Register<IModelListingProvider>();
         Register<IChatCompletionsProvider>();
         Register<IChatBridgeProvider>();
+        Register<INativeChatOptionsProvider>();
         Register<IResponsesProvider>();
         Register<IMessagesProvider>();
         Register<IDecisionsProvider>();
@@ -31,6 +32,7 @@ public static class ProviderServiceCollectionExtensions
         Register<IStreamingImagesProvider>();
         Register<IVideoProvider>();
         Register<ISpeechProvider>();
+        Register<IStreamingSpeechProvider>();
         Register<ITranscriptionProvider>();
         Register<IStreamingTranscriptionProvider>();
         Register<INativeAudioTranscriptionProvider>();
@@ -39,6 +41,7 @@ public static class ProviderServiceCollectionExtensions
         Register<IOpenAIRealtimeProvider>();
         Register<IOpenAILiveSessionProvider>();
         Register<IEmbeddingsProvider>();
+        Register<IEmbeddingMetadataProvider>();
         Register<IRerankingProvider>();
         Register<IContainerFilesProvider>();
         Register<ISkillReadProvider>();

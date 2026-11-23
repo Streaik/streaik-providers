@@ -35,6 +35,12 @@ public interface ISpeechProvider
     Task<HttpResponseMessage> SpeakAsync(AudioSpeechRequest request, IReadOnlyDictionary<string, string> headers, CancellationToken ct);
 }
 
+public interface IStreamingSpeechProvider : ISpeechProvider
+{
+    // Returns a binary audio stream. The gateway supplies client-specific framing.
+    Task<HttpResponseMessage> SpeakStreamingAsync(AudioSpeechRequest request, IReadOnlyDictionary<string, string> headers, CancellationToken ct);
+}
+
 public interface ITranscriptionProvider
 {
     Task<TranscriptionResponse> TranscribeAsync(string model, Stream audio, string mediaType, string fileName,
@@ -72,6 +78,12 @@ public interface IOpenAIRealtimeProvider
 public interface IEmbeddingsProvider
 {
     Task<OpenAIEmbeddingResponse> EmbedAsync(OpenAIEmbeddingRequest request, IReadOnlyDictionary<string, string> headers, CancellationToken ct);
+}
+
+public interface IEmbeddingMetadataProvider : IEmbeddingsProvider
+{
+    Task<(OpenAIEmbeddingResponse Result, JsonElement Body, Dictionary<string, string?> Headers)> EmbedWithMetadataAsync(
+        OpenAIEmbeddingRequest request, IReadOnlyDictionary<string, string> headers, CancellationToken ct);
 }
 
 public interface IRerankingProvider

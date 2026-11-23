@@ -19,6 +19,9 @@ public interface IChatBridgeProvider
     IChatCompletionsProvider ChatBridge { get; }
 }
 
+// Opt in to forwarding provider-scoped Vercel settings as native JSON extension fields.
+public interface INativeChatOptionsProvider { }
+
 public interface IResponsesProvider
 {
     Task<ResponseResult> CreateResponseAsync(ResponseRequest request, IReadOnlyDictionary<string, string> headers, CancellationToken cancellationToken);
