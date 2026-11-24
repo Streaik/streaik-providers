@@ -34,6 +34,12 @@ public static class CompatibleChatProviderRegistration
     public static IServiceCollection AddCrusoe(this IServiceCollection services)
         => Add<Crusoe>(services, "crusoe", "https://api.inference.crusoecloud.com/v1/");
 
+    public static IServiceCollection AddArkRoute(this IServiceCollection services)
+        => Add<ArkRoute>(services, "arkroute", "https://api.ark-route.com/v1/");
+
+    public static IServiceCollection AddBergetAI(this IServiceCollection services)
+        => Add<BergetAIProvider>(services, "bergetai", "https://api.berget.ai/v1/");
+
     public static IServiceCollection AddGoogle(this IServiceCollection services)
         => Add<GoogleGeminiProvider>(services, "google", "https://generativelanguage.googleapis.com/");
 
@@ -50,6 +56,8 @@ public static class CompatibleChatProviderRegistration
     private sealed class Groq(IHttpClientFactory clients, IProviderCredentials credentials) : CompatibleChatProvider(clients, credentials, "groq");
     private sealed class Together(IHttpClientFactory clients, IProviderCredentials credentials) : CompatibleChatProvider(clients, credentials, "together");
     private sealed class Cerebras(IHttpClientFactory clients, IProviderCredentials credentials) : CompatibleChatProvider(clients, credentials, "cerebras");
+    private sealed class ArkRoute(IHttpClientFactory clients, IProviderCredentials credentials)
+        : CompatibleChatProvider(clients, credentials, "arkroute"), INativeChatOptionsProvider;
     private sealed class CloudRift(IHttpClientFactory clients, IProviderCredentials credentials)
         : CompatibleChatProvider(clients, credentials, "cloudrift"), INativeChatOptionsProvider;
     private sealed class Chutes(IHttpClientFactory clients, IProviderCredentials credentials)
@@ -100,7 +108,7 @@ internal abstract class CompatibleChatProvider(IHttpClientFactory clients, IProv
         var auth = Bearer(ApiKey());
         using var client = CreateClient();
         PrepareCompatibleRequest(request);
-        return await NativeHttp.PostAsync<ChatCompletionOptions, ChatCompletion>(client, CompatiblePath("chat/completions"), request, auth, headers, Json, ct);
+        return await NativeHttp.PostAsync<object, ChatCompletion>(client, CompatiblePath("chat/completions"), ChatBody(request, false), auth, headers, Json, ct);
     }
 
     public virtual async IAsyncEnumerable<ChatCompletionUpdate> StreamChatAsync(ChatCompletionOptions request, IReadOnlyDictionary<string, string> headers,
@@ -109,7 +117,7 @@ internal abstract class CompatibleChatProvider(IHttpClientFactory clients, IProv
         var auth = Bearer(ApiKey());
         using var client = CreateClient();
         PrepareCompatibleRequest(request);
-        await foreach (var part in NativeHttp.StreamAsync<ChatCompletionOptions, ChatCompletionUpdate>(client, CompatiblePath("chat/completions"), request, auth, headers, Json, _ => false, ct))
+        await foreach (var part in NativeHttp.StreamAsync<object, ChatCompletionUpdate>(client, CompatiblePath("chat/completions"), ChatBody(request, true), auth, headers, Json, _ => false, ct))
         {
             // Groq supplies streaming usage in an extension instead of the standard field.
             if (id == "groq" && part.Usage is null && part.AdditionalProperties?.TryGetValue("x_groq", out var groq) == true
@@ -118,6 +126,10 @@ internal abstract class CompatibleChatProvider(IHttpClientFactory clients, IProv
             yield return part;
         }
     }
+
+    private object ChatBody(ChatCompletionOptions request, bool stream)
+        => this is INativeChatOptionsProvider && request.AdditionalProperties?.ContainsKey(id) == true
+            ? NativeOptionsPayload.Build(request, id, Json, stream) : request;
 
     public virtual async IAsyncEnumerable<Model> ListModelsAsync([EnumeratorCancellation] CancellationToken ct)
     {
