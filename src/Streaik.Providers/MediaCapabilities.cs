@@ -17,6 +17,12 @@ public interface IImageProvider
     Task<OpenAIImagesResponse> EditImageAsync(OpenAIImageEditRequest request, IReadOnlyDictionary<string, string> headers, CancellationToken ct);
 }
 
+// Optional dispatch for providers that offer both chat and image models.
+public interface IImageModelRoutingProvider : IImageProvider
+{
+    Task<bool> IsImageModelAsync(string model, CancellationToken ct);
+}
+
 public interface IVideoProvider
 {
     Task<VideoOperationStartResult> StartVideoAsync(VideoRequest request, IReadOnlyDictionary<string, string> headers, CancellationToken ct);
@@ -39,6 +45,20 @@ public interface IStreamingSpeechProvider : ISpeechProvider
 {
     // Returns a binary audio stream. The gateway supplies client-specific framing.
     Task<HttpResponseMessage> SpeakStreamingAsync(AudioSpeechRequest request, IReadOnlyDictionary<string, string> headers, CancellationToken ct);
+}
+
+// For upstreams that return structured audio events, not just a binary stream.
+public interface IStreamingSpeechEventsProvider
+{
+    IAsyncEnumerable<StreamingSpeechPart> StreamSpeechAsync(AudioSpeechRequest request, IReadOnlyDictionary<string, string> headers, CancellationToken ct);
+    IAsyncEnumerable<StreamingSpeechPart> StreamSpeechAsync(StreamingSpeechRequest request, IReadOnlyDictionary<string, string> headers, CancellationToken ct);
+}
+
+// Opt in to direct audio turns on chat surfaces that can represent the input and output.
+public interface IChatAudioRoutingProvider
+{
+    bool IsSpeechModel(string model);
+    bool IsTranscriptionModel(string model);
 }
 
 public interface ITranscriptionProvider

@@ -29,10 +29,13 @@ public static class ProviderServiceCollectionExtensions
         Register<IMessagesProvider>();
         Register<IDecisionsProvider>();
         Register<IImageProvider>();
+        Register<IImageModelRoutingProvider>();
         Register<IStreamingImagesProvider>();
         Register<IVideoProvider>();
         Register<ISpeechProvider>();
         Register<IStreamingSpeechProvider>();
+        Register<IStreamingSpeechEventsProvider>();
+        Register<IChatAudioRoutingProvider>();
         Register<ITranscriptionProvider>();
         Register<IStreamingTranscriptionProvider>();
         Register<INativeAudioTranscriptionProvider>();
