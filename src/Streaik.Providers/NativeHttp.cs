@@ -35,6 +35,12 @@ internal static class NativeHttp
         return (result, responseHeaders);
     }
 
+    internal static Dictionary<string, string?> SafeResponseMetadataHeaders(Dictionary<string, string?> headers)
+        => headers.Where(pair => pair.Key.ToLowerInvariant() is "content-type" or "date" or "retry-after" or "request-id"
+            or "x-request-id" or "x-nebius-request-id" or "x-nomic-request-id" or "x-correlation-id"
+            || pair.Key.StartsWith("x-ratelimit-", StringComparison.OrdinalIgnoreCase))
+            .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase);
+
     public static async IAsyncEnumerable<TEvent> StreamAsync<TRequest, TEvent>(HttpClient client, string path, TRequest body,
         Action<HttpRequestHeaders> auth, IReadOnlyDictionary<string, string> headers, JsonSerializerOptions json,
         Func<TEvent, bool> terminal, [EnumeratorCancellation] CancellationToken ct)
