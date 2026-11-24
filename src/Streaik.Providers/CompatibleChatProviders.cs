@@ -92,8 +92,7 @@ internal abstract class CompatibleChatProvider(IHttpClientFactory clients, IProv
     {
         var key = credentials.GetApiKey(id);
         if (string.IsNullOrWhiteSpace(key)) yield break;
-        using var client = CreateClient();
-        var result = await NativeHttp.GetAsync<JsonElement>(client, chatPrefix + "models", Bearer(key), ct);
+        var result = await FetchModelsAsync(key, ct);
         // Together uses a bare array; the others use the OpenAI-style data envelope.
         foreach (var item in Array(result.ValueKind == JsonValueKind.Array ? result : Property(result, "data")))
         {
@@ -117,6 +116,12 @@ internal abstract class CompatibleChatProvider(IHttpClientFactory clients, IProv
                 ContextWindow = context.ValueKind == JsonValueKind.Number && context.TryGetInt32(out var size) ? size : null,
                 Pricing = Pricing(item) };
         }
+    }
+
+    protected virtual async Task<JsonElement> FetchModelsAsync(string key, CancellationToken ct)
+    {
+        using var client = CreateClient();
+        return await NativeHttp.GetAsync<JsonElement>(client, chatPrefix + "models", Bearer(key), ct);
     }
 
     protected virtual ModelPricing? Pricing(JsonElement model) => null;
