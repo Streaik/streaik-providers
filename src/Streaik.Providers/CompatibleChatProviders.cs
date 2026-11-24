@@ -28,6 +28,9 @@ public static class CompatibleChatProviderRegistration
     public static IServiceCollection AddChutes(this IServiceCollection services)
         => Add<Chutes>(services, "chutes", "https://llm.chutes.ai/v1/");
 
+    public static IServiceCollection AddCloudRift(this IServiceCollection services)
+        => Add<CloudRift>(services, "cloudrift", "https://inference.cloudrift.ai/v1/");
+
     public static IServiceCollection AddGoogle(this IServiceCollection services)
         => Add<GoogleGeminiProvider>(services, "google", "https://generativelanguage.googleapis.com/");
 
@@ -44,6 +47,8 @@ public static class CompatibleChatProviderRegistration
     private sealed class Groq(IHttpClientFactory clients, IProviderCredentials credentials) : CompatibleChatProvider(clients, credentials, "groq");
     private sealed class Together(IHttpClientFactory clients, IProviderCredentials credentials) : CompatibleChatProvider(clients, credentials, "together");
     private sealed class Cerebras(IHttpClientFactory clients, IProviderCredentials credentials) : CompatibleChatProvider(clients, credentials, "cerebras");
+    private sealed class CloudRift(IHttpClientFactory clients, IProviderCredentials credentials)
+        : CompatibleChatProvider(clients, credentials, "cloudrift"), INativeChatOptionsProvider;
     private sealed class Chutes(IHttpClientFactory clients, IProviderCredentials credentials)
         : CompatibleChatProvider(clients, credentials, "chutes"), INativeChatOptionsProvider;
     private sealed class Moonshot(IHttpClientFactory clients, IProviderCredentials credentials)
