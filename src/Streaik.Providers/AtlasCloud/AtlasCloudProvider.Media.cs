@@ -2,7 +2,6 @@ using System.Buffers.Text;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using Microsoft.AspNetCore.WebUtilities;
 using Streaik.OpenAI.Models;
 using Streaik.Vercel.Models;
 using static Streaik.Providers.MediaHttp;
@@ -47,11 +46,15 @@ internal sealed partial class AtlasCloudProvider
         deadline.CancelAfter(TimeSpan.FromMinutes(5));
         try
         {
-            while (!Failed(job) && !Completed(job) && !Outputs(job).Any())
+            if (NeedsPoll(job))
             {
                 var id = JobId(submit);
-                if (!job.Equals(submit)) await Task.Delay(TimeSpan.FromSeconds(2), deadline.Token);
                 job = await PollAsync(client, id, auth, deadline.Token);
+                while (NeedsPoll(job))
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(2), deadline.Token);
+                    job = await PollAsync(client, id, auth, deadline.Token);
+                }
             }
         }
         catch (OperationCanceledException ex) when (!ct.IsCancellationRequested)
@@ -147,11 +150,13 @@ internal sealed partial class AtlasCloudProvider
 
     private static string VideoImage(VideoFile image)
     {
-        if (string.IsNullOrWhiteSpace(image.Data)) throw new ProviderRequestException("An image reference must not be empty.");
-        var data = image.Data.Trim();
+        var reference = image is VideoFileUrl urlFile ? urlFile.Url : image.Data;
+        if (string.IsNullOrWhiteSpace(reference)) throw new ProviderRequestException("An image reference must not be empty.");
+        var data = reference.Trim();
         // Input references are forwarded as data; the gateway never downloads them.
-        if (data.StartsWith("data:image/", StringComparison.OrdinalIgnoreCase) || Uri.TryCreate(data, UriKind.Absolute, out var url)
-            && url.Scheme is "http" or "https" && url.UserInfo.Length == 0) return data;
+        if (Uri.TryCreate(data, UriKind.Absolute, out var url) && url.Scheme is "http" or "https" && url.UserInfo.Length == 0) return data;
+        if (image is VideoFileUrl) throw new ProviderRequestException("An image URL must use HTTP or HTTPS.");
+        if (data.StartsWith("data:image/", StringComparison.OrdinalIgnoreCase)) return data;
         return $"data:{image.MediaType ?? "image/jpeg"};base64,{data}";
     }
 
@@ -166,6 +171,7 @@ internal sealed partial class AtlasCloudProvider
     private static string JobId(JsonElement job) => String(JobData(job), "id") ?? throw new IOException("AtlasCloud did not return a job ID.");
     private static bool Failed(JsonElement job) => String(JobData(job), "status")?.ToLowerInvariant() is "failed" or "error" or "canceled" or "cancelled";
     private static bool Completed(JsonElement job) => String(JobData(job), "status")?.ToLowerInvariant() is "completed" or "succeeded";
+    private static bool NeedsPoll(JsonElement job) => !Failed(job) && !Completed(job) && !Outputs(job).Any();
     private static IEnumerable<string> Outputs(JsonElement job) => Array(Property(JobData(job), "outputs"))
         .Where(x => x.ValueKind == JsonValueKind.String).Select(x => x.GetString()!).Where(x => !string.IsNullOrWhiteSpace(x));
     private static DateTimeOffset Timestamp(JsonElement job) => Property(JobData(job), "created_at") is { ValueKind: JsonValueKind.String } date

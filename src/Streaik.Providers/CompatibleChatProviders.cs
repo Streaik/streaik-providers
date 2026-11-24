@@ -57,10 +57,10 @@ public static class CompatibleChatProviderRegistration
     private sealed class Crusoe(IHttpClientFactory clients, IProviderCredentials credentials)
         : CompatibleChatProvider(clients, credentials, "crusoe"), INativeChatOptionsProvider
     {
-        protected override void PrepareChat(ChatCompletionOptions request)
+        protected override void PrepareCompatibleRequest(ChatCompletionOptions request)
         {
             request.Store = null;
-            if (request.Tools?.Any() == false) request.Tools = null;
+            if (request.Tools?.Any() == false) request.Tools = null!;
         }
 
         protected override ModelPricing? Pricing(JsonElement model)
@@ -97,7 +97,7 @@ internal abstract class CompatibleChatProvider(IHttpClientFactory clients, IProv
     {
         var auth = Bearer(ApiKey());
         using var client = CreateClient();
-        PrepareChat(request);
+        PrepareCompatibleRequest(request);
         return await NativeHttp.PostAsync<ChatCompletionOptions, ChatCompletion>(client, chatPrefix + "chat/completions", request, auth, headers, Json, ct);
     }
 
@@ -106,7 +106,7 @@ internal abstract class CompatibleChatProvider(IHttpClientFactory clients, IProv
     {
         var auth = Bearer(ApiKey());
         using var client = CreateClient();
-        PrepareChat(request);
+        PrepareCompatibleRequest(request);
         await foreach (var part in NativeHttp.StreamAsync<ChatCompletionOptions, ChatCompletionUpdate>(client, chatPrefix + "chat/completions", request, auth, headers, Json, _ => false, ct))
         {
             // Groq supplies streaming usage in an extension instead of the standard field.
@@ -153,7 +153,7 @@ internal abstract class CompatibleChatProvider(IHttpClientFactory clients, IProv
         return await NativeHttp.GetAsync<JsonElement>(client, chatPrefix + "models", Bearer(key), ct);
     }
 
-    protected virtual void PrepareChat(ChatCompletionOptions request)
+    protected virtual void PrepareCompatibleRequest(ChatCompletionOptions request)
     {
         if (request.Store == false) request.Store = null; // These endpoints do not define OpenAI's store flag.
     }
