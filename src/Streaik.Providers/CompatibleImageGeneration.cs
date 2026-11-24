@@ -8,12 +8,13 @@ namespace Streaik.Providers;
 internal static class CompatibleImageGeneration
 {
     public static async Task<OpenAIImagesResponse> GenerateAsync(HttpClient client, string provider, string key,
-        OpenAIImageGenerationRequest request, IReadOnlyDictionary<string, string> headers, CancellationToken ct)
+        OpenAIImageGenerationRequest request, IReadOnlyDictionary<string, string> headers, CancellationToken ct,
+        string path = "v1/images/generations")
     {
         var payload = ToObject(request);
         payload.Remove("stream");
         payload.Remove("partial_images");
-        using var response = await SendAsync(client, HttpMethod.Post, "v1/images/generations", JsonContent.Create(payload, options: Json),
+        using var response = await SendAsync(client, HttpMethod.Post, path, JsonContent.Create(payload, options: Json),
             "Bearer", key, headers, ct);
         var body = await NativeHttp.ReadAsync<JsonElement>(response, Json, ct);
         var result = body.Deserialize<OpenAIImagesResponse>(Json) ?? throw new JsonException("Missing image response.");

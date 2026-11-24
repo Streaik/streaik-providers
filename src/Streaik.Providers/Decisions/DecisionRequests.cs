@@ -36,7 +36,7 @@ public static class DecisionRequests
         }
     }
 
-    internal static void Validate(DecisionRequest request)
+    internal static void Validate(DecisionRequest request, bool requiresInstructions = true)
     {
         if (string.IsNullOrWhiteSpace(request.Model) || request.State is null || request.Questions is not { Count: > 0 })
             throw new ProviderRequestException("Decisions requires a model, state, and at least one question.");
@@ -46,7 +46,7 @@ public static class DecisionRequests
             throw new ProviderRequestException("This Decisions provider does not support maxOutputTokens or reasoning.");
         foreach (var (id, question) in request.Questions)
         {
-            if (string.IsNullOrWhiteSpace(id) || question?.Instructions is null)
+            if (string.IsNullOrWhiteSpace(id) || question is null || requiresInstructions && question.Instructions is null)
                 throw new ProviderRequestException("Every decision question requires a nonempty ID and instructions.");
             if (question is not (DecisionBooleanQuestion or DecisionChoiceQuestion { Criteria.Count: > 0 } or DecisionScoreQuestion { Criteria.Count: > 0 }))
                 throw new ProviderRequestException($"Unsupported question type or invalid criteria for '{id}'.");
@@ -160,7 +160,7 @@ public static class DecisionRequests
         content.Add(new JsonObject { ["type"] = "input_image", ["image_url"] = url });
     }
 
-    private static OpenAIDecisionQuestion MapQuestion(string id, DecisionQuestion question)
+    internal static OpenAIDecisionQuestion MapQuestion(string id, DecisionQuestion question)
     {
         OpenAIDecisionQuestion result = question switch
         {
