@@ -39,13 +39,34 @@ public sealed partial class OpenAIProvider(IHttpClientFactory clients, IProvider
         => StreamAsync<ResponseRequest, ResponseStreamPart>("v1/responses", request, headers, ResponseJson.Default,
             part => part.Type is "response.completed" or "response.failed" or "response.incomplete" or "error", ct);
 
-    public async IAsyncEnumerable<Model> ListModelsAsync([EnumeratorCancellation] CancellationToken ct)
+    public async IAsyncEnumerable<Model> ListModelsAsync(
+    [EnumeratorCancellation] CancellationToken ct)
     {
         var key = credentials.GetApiKey(Id);
         if (string.IsNullOrWhiteSpace(key)) yield break;
+
         using var client = clients.CreateClient(Id);
-        var page = await NativeHttp.GetAsync<ModelResponse>(client, "v1/models", h => Authenticate(h, key), ct, ProviderModelJson.Options);
-        foreach (var model in page.Data) yield return model;
+
+        var page = await NativeHttp.GetAsync<ModelResponse>(
+            client, "v1/models", h => Authenticate(h, key),
+            ct, ProviderModelJson.Options);
+
+        foreach (var model in page.Data.Where(a => a.ShutdownDate is null))
+        {
+            if (model.Id.StartsWith("gpt-live"))
+            {
+                model.Type = "audio";
+                model.Tags = [.. (model.Tags ?? [])
+                .Where(t => t != "realtime"), "realtime"];
+            }
+            else if (model.Id == "chat-latest"
+                || model.Id.Contains("-search-api"))
+            {
+                model.Type = "language";
+            }
+
+            yield return model;
+        }
     }
 
     private async Task<TResult> PostAsync<TRequest, TResult>(string path, TRequest request, IReadOnlyDictionary<string, string> headers,
