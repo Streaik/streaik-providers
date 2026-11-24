@@ -44,7 +44,7 @@ public sealed partial class OpenAIProvider(IHttpClientFactory clients, IProvider
         var key = credentials.GetApiKey(Id);
         if (string.IsNullOrWhiteSpace(key)) yield break;
         using var client = clients.CreateClient(Id);
-        var page = await NativeHttp.GetAsync<ModelResponse>(client, "v1/models", h => Authenticate(h, key), ct);
+        var page = await NativeHttp.GetAsync<ModelResponse>(client, "v1/models", h => Authenticate(h, key), ct, ProviderModelJson.Options);
         foreach (var model in page.Data) yield return model;
     }
 

@@ -48,7 +48,7 @@ public sealed class AnthropicProvider(IHttpClientFactory clients, IProviderCrede
         var cursors = new HashSet<string>(StringComparer.Ordinal);
         while (true)
         {
-            var page = await NativeHttp.GetAsync<ModelPage>(client, path, h => Authenticate(h, key), ct);
+            var page = await NativeHttp.GetAsync<ModelPage>(client, path, h => Authenticate(h, key), ct, ProviderModelJson.Options);
             foreach (var model in page.Data) yield return model;
 
             if (!page.HasMore) yield break;

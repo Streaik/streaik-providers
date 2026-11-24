@@ -51,7 +51,8 @@ internal sealed class SluisProvider(IHttpClientFactory clients, IProviderCredent
         {
             var model = "sluis/" + id;
             seen.Add(model);
-            yield return new() { Id = model, Name = id, Type = "language", OwnedBy = "Sluis", Description = description };
+            yield return new() { Id = model, Name = id, Type = "language", OwnedBy = "Sluis", Description = description,
+                Tags = id switch { "agents" => ["agent"], "translate" => ["translate"], _ => null } };
         }
         await foreach (var model in base.ListModelsAsync(ct))
             if (seen.Add(model.Id)) yield return model;

@@ -7,12 +7,13 @@ namespace Streaik.Providers;
 
 internal static class NativeHttp
 {
-    public static async Task<T> GetAsync<T>(HttpClient client, string path, Action<HttpRequestHeaders> authenticate, CancellationToken ct)
+    public static async Task<T> GetAsync<T>(HttpClient client, string path, Action<HttpRequestHeaders> authenticate, CancellationToken ct,
+        JsonSerializerOptions? json = null)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, path);
         authenticate(request.Headers);
         using var response = await SendAsync(client, request, ct);
-        return await ReadAsync<T>(response, JsonSerializerOptions.Web, ct);
+        return await ReadAsync<T>(response, json ?? JsonSerializerOptions.Web, ct);
     }
 
     public static async Task<TResult> PostAsync<TRequest, TResult>(HttpClient client, string path, TRequest body,

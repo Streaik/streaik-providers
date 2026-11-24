@@ -36,6 +36,7 @@ public interface IMessagesProvider
 
 public interface IModelListingProvider
 {
+    // Tags are Streaik classifications (realtime, agent, voice, translate), not upstream metadata.
     IAsyncEnumerable<Model> ListModelsAsync(CancellationToken cancellationToken);
 }
 

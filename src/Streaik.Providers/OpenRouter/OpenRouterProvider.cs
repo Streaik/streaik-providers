@@ -92,10 +92,9 @@ public sealed partial class OpenRouterProvider(IHttpClientFactory clients, IProv
                 if (String(item, "id") is not { Length: > 0 } id) continue;
                 var context = Property(item, "context_length");
                 var limit = Property(Property(item, "top_provider"), "max_completion_tokens");
-                var tags = Array(Property(item, "tags")).Where(tag => tag.ValueKind == JsonValueKind.String).Select(tag => tag.GetString()!).ToArray();
                 foreach (var type in ModelTypes(item))
                     if (seen.Add((id, type)))
-                        yield return new Model { Id = id, Name = String(item, "name") ?? id, Type = type, Description = String(item, "description"), Tags = tags,
+                        yield return new Model { Id = id, Name = String(item, "name") ?? id, Type = type, Description = String(item, "description"),
                             ContextWindow = context.ValueKind == JsonValueKind.Number && context.TryGetInt32(out var count) ? count : null,
                             MaxTokens = limit.ValueKind == JsonValueKind.Number && limit.TryGetInt32(out var max) ? max : null };
             }

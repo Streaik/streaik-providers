@@ -79,7 +79,7 @@ internal sealed class CelerisProvider(IHttpClientFactory clients, IProviderCrede
                 throw new JsonException("Celeris model catalog must contain a data array.");
             foreach (var item in data.EnumerateArray())
             {
-                var model = item.Deserialize<Model>(Json) ?? throw new JsonException("Invalid Celeris model.");
+                var model = item.Deserialize<Model>(ProviderModelJson.Options) ?? throw new JsonException("Invalid Celeris model.");
                 if (string.IsNullOrWhiteSpace(model.Id)) throw new JsonException("Celeris model IDs cannot be empty.");
                 if (model.Id == DecisionModel) model.Id = DecisionAlias;
                 if (string.IsNullOrWhiteSpace(model.Name)) model.Name = model.Id;

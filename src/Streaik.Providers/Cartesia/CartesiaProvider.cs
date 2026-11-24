@@ -60,8 +60,7 @@ internal sealed partial class CartesiaProvider(IHttpClientFactory clients, IProv
         await foreach (var voice in CatalogAsync(client, "voices", ct))
             if (String(voice, "id") is { Length: > 0 } id)
                 foreach (var model in SpeechModels)
-                    yield return Model($"tts/{model}/{id}", $"{model} {String(voice, "name") ?? id}", "speech",
-                        new[] { "voice", "realtime-token", String(voice, "language"), String(voice, "gender") }.OfType<string>().ToArray());
+                    yield return Model($"tts/{model}/{id}", $"{model} {String(voice, "name") ?? id}", "speech", ["voice"]);
         await foreach (var agent in CatalogAsync(client, "v1/agents", ct))
             if (String(agent, "id") is { Length: > 0 } id)
             {

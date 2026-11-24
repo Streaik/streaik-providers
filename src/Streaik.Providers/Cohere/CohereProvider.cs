@@ -45,12 +45,14 @@ internal sealed partial class CohereProvider(IHttpClientFactory clients, IProvid
             foreach (var model in Array(Property(page, "models")))
             {
                 if (String(model, "name") is not { Length: > 0 } name || !models.Add(name)) continue;
-                var tags = Array(Property(model, "features")).Concat(Array(Property(model, "endpoints")))
-                    .Where(x => x.ValueKind == JsonValueKind.String).Select(x => x.GetString()!).Distinct().ToArray();
-                var type = IsTranscriptionModel(name) || tags.Any(IsTranscriptionModel) ? "transcription"
-                    : name.Contains("rerank", StringComparison.OrdinalIgnoreCase) || tags.Contains("rerank") ? "reranking"
-                    : name.Contains("embed", StringComparison.OrdinalIgnoreCase) || tags.Contains("embed") ? "embedding" : "language";
-                yield return new Model { Id = name, Name = name, Type = type, Tags = tags, OwnedBy = Id,
+                var capabilities = Array(Property(model, "features")).Concat(Array(Property(model, "endpoints")))
+                    .Where(x => x.ValueKind == JsonValueKind.String).Select(x => x.GetString()!).ToArray();
+                var type = IsTranscriptionModel(name) || capabilities.Any(IsTranscriptionModel) ? "transcription"
+                    : name.Contains("rerank", StringComparison.OrdinalIgnoreCase) || capabilities.Contains("rerank") ? "reranking"
+                    : name.Contains("embed", StringComparison.OrdinalIgnoreCase) || capabilities.Contains("embed") ? "embedding" : "language";
+                var translate = name.Equals("command-a-translate", StringComparison.OrdinalIgnoreCase)
+                    || name.StartsWith("command-a-translate-", StringComparison.OrdinalIgnoreCase);
+                yield return new Model { Id = name, Name = name, Type = type, Tags = translate ? ["translate"] : null, OwnedBy = Id,
                     ContextWindow = Int(model, "context_length"), Description = String(model, "description") };
             }
             token = String(page, "next_page_token");
