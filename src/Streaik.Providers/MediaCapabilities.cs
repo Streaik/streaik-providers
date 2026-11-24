@@ -41,6 +41,18 @@ public interface ISpeechProvider
     Task<HttpResponseMessage> SpeakAsync(AudioSpeechRequest request, IReadOnlyDictionary<string, string> headers, CancellationToken ct);
 }
 
+// Internal transport information for adapters whose existing wire format has a metadata field.
+public sealed class SpeechProviderResponse : HttpResponseMessage
+{
+    public SpeechProviderResponse(HttpContent audio, Dictionary<string, JsonElement>? providerMetadata) : base(System.Net.HttpStatusCode.OK)
+    {
+        Content = audio;
+        ProviderMetadata = providerMetadata;
+    }
+
+    public Dictionary<string, JsonElement>? ProviderMetadata { get; }
+}
+
 public interface IStreamingSpeechProvider : ISpeechProvider
 {
     // Returns a binary audio stream. The gateway supplies client-specific framing.

@@ -112,6 +112,7 @@ internal abstract class CompatibleChatProvider(IHttpClientFactory clients, IProv
             if (context.ValueKind != JsonValueKind.Number) context = Property(item, "context_window");
             yield return new Model { Id = model, Name = String(item, "display_name") ?? String(item, "name") ?? model,
                 Type = type ?? (live ? "audio" : "model"), OwnedBy = String(item, "owned_by") ?? String(item, "organization") ?? id,
+                Description = String(item, "description"),
                 Tags = Array(Property(item, "tags")).Where(tag => tag.ValueKind == JsonValueKind.String)
                     .Select(tag => tag.GetString()!).Concat(live ? ["realtime"] : []).ToArray(),
                 ContextWindow = context.ValueKind == JsonValueKind.Number && context.TryGetInt32(out var size) ? size : null,
