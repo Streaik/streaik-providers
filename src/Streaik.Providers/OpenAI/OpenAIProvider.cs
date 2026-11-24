@@ -53,7 +53,8 @@ public sealed partial class OpenAIProvider(IHttpClientFactory clients, IProvider
 
         foreach (var model in page.Data.Where(a => a.ShutdownDate is null))
         {
-            if (model.Id.StartsWith("gpt-live"))
+            if (model.Id.StartsWith("gpt-live")
+                && !model.Id.Contains("transcribe"))
             {
                 model.Type = "audio";
                 model.Tags = [.. (model.Tags ?? [])
