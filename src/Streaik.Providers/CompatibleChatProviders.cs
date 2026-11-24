@@ -31,6 +31,9 @@ public static class CompatibleChatProviderRegistration
     public static IServiceCollection AddCloudRift(this IServiceCollection services)
         => Add<CloudRift>(services, "cloudrift", "https://inference.cloudrift.ai/v1/");
 
+    public static IServiceCollection AddCrusoe(this IServiceCollection services)
+        => Add<Crusoe>(services, "crusoe", "https://api.inference.crusoecloud.com/v1/");
+
     public static IServiceCollection AddGoogle(this IServiceCollection services)
         => Add<GoogleGeminiProvider>(services, "google", "https://generativelanguage.googleapis.com/");
 
@@ -51,6 +54,27 @@ public static class CompatibleChatProviderRegistration
         : CompatibleChatProvider(clients, credentials, "cloudrift"), INativeChatOptionsProvider;
     private sealed class Chutes(IHttpClientFactory clients, IProviderCredentials credentials)
         : CompatibleChatProvider(clients, credentials, "chutes"), INativeChatOptionsProvider;
+    private sealed class Crusoe(IHttpClientFactory clients, IProviderCredentials credentials)
+        : CompatibleChatProvider(clients, credentials, "crusoe"), INativeChatOptionsProvider
+    {
+        protected override void PrepareChat(ChatCompletionOptions request)
+        {
+            request.Store = null;
+            if (request.Tools?.Any() == false) request.Tools = null;
+        }
+
+        protected override ModelPricing? Pricing(JsonElement model)
+        {
+            var pricing = Property(model, "pricing");
+            if (ProviderPrices.ReadPair(pricing, "prompt", "completion") is not { } price) return null;
+            price.Input /= 1_000_000m;
+            price.Output /= 1_000_000m;
+            if (ProviderPrices.TokenPrice(Property(pricing, "input_cache_reads")) is >= 0 and var cacheRead)
+                price.InputCacheRead = cacheRead / 1_000_000m;
+            return price;
+        }
+    }
+
     private sealed class Moonshot(IHttpClientFactory clients, IProviderCredentials credentials)
         : CompatibleChatProvider(clients, credentials, "moonshot"), INativeChatOptionsProvider
     {
@@ -73,7 +97,7 @@ internal abstract class CompatibleChatProvider(IHttpClientFactory clients, IProv
     {
         var auth = Bearer(ApiKey());
         using var client = CreateClient();
-        if (request.Store == false) request.Store = null; // These endpoints do not define OpenAI's store flag.
+        PrepareChat(request);
         return await NativeHttp.PostAsync<ChatCompletionOptions, ChatCompletion>(client, chatPrefix + "chat/completions", request, auth, headers, Json, ct);
     }
 
@@ -82,7 +106,7 @@ internal abstract class CompatibleChatProvider(IHttpClientFactory clients, IProv
     {
         var auth = Bearer(ApiKey());
         using var client = CreateClient();
-        if (request.Store == false) request.Store = null;
+        PrepareChat(request);
         await foreach (var part in NativeHttp.StreamAsync<ChatCompletionOptions, ChatCompletionUpdate>(client, chatPrefix + "chat/completions", request, auth, headers, Json, _ => false, ct))
         {
             // Groq supplies streaming usage in an extension instead of the standard field.
@@ -127,6 +151,11 @@ internal abstract class CompatibleChatProvider(IHttpClientFactory clients, IProv
     {
         using var client = CreateClient();
         return await NativeHttp.GetAsync<JsonElement>(client, chatPrefix + "models", Bearer(key), ct);
+    }
+
+    protected virtual void PrepareChat(ChatCompletionOptions request)
+    {
+        if (request.Store == false) request.Store = null; // These endpoints do not define OpenAI's store flag.
     }
 
     protected virtual ModelPricing? Pricing(JsonElement model) => null;
