@@ -13,8 +13,8 @@ internal abstract class CompatibleChatEmbeddingProvider(IHttpClientFactory clien
     {
         using var client = CreateClient();
         PrepareCompatibleRequest(request);
-        return await NativeHttp.PostAsync<Dictionary<string, JsonElement>, ChatCompletion>(client, prefix + "chat/completions",
-            NativeOptionsPayload.Build(request, id, Json, false), Bearer(ApiKey()), headers, Json, ct);
+        return await NativeHttp.PostAsync<Dictionary<string, JsonElement>, ChatCompletion>(client, CompatiblePath("chat/completions"),
+            NativeOptionsPayload.Build(request, ProviderId, Json, false), Bearer(ApiKey()), headers, Json, ct);
     }
 
     public override async IAsyncEnumerable<ChatCompletionUpdate> StreamChatAsync(ChatCompletionOptions request,
@@ -22,8 +22,8 @@ internal abstract class CompatibleChatEmbeddingProvider(IHttpClientFactory clien
     {
         using var client = CreateClient();
         PrepareCompatibleRequest(request);
-        await foreach (var part in NativeHttp.StreamAsync<Dictionary<string, JsonElement>, ChatCompletionUpdate>(client, prefix + "chat/completions",
-            NativeOptionsPayload.Build(request, id, Json, true), Bearer(ApiKey()), headers, Json,
+        await foreach (var part in NativeHttp.StreamAsync<Dictionary<string, JsonElement>, ChatCompletionUpdate>(client, CompatiblePath("chat/completions"),
+            NativeOptionsPayload.Build(request, ProviderId, Json, true), Bearer(ApiKey()), headers, Json,
             part => part.AdditionalProperties?.ContainsKey("error") == true, ct)) yield return part;
     }
 
@@ -34,10 +34,10 @@ internal abstract class CompatibleChatEmbeddingProvider(IHttpClientFactory clien
         OpenAIEmbeddingRequest request, IReadOnlyDictionary<string, string> headers, CancellationToken ct)
     {
         using var client = CreateClient();
-        var (body, upstream) = await NativeHttp.PostJsonAsync(client, prefix + "embeddings", NativeOptionsPayload.Build(request, id, Json),
+        var (body, upstream) = await NativeHttp.PostJsonAsync(client, CompatiblePath("embeddings"), NativeOptionsPayload.Build(request, ProviderId, Json),
             Bearer(ApiKey()), headers, Json, ct);
-        if (Property(body, "data").ValueKind != JsonValueKind.Array) throw new JsonException($"Missing {id} embeddings.");
-        var result = body.Deserialize<OpenAIEmbeddingResponse>(Json) ?? throw new JsonException($"Missing {id} embedding response.");
+        if (Property(body, "data").ValueKind != JsonValueKind.Array) throw new JsonException($"Missing {ProviderId} embeddings.");
+        var result = body.Deserialize<OpenAIEmbeddingResponse>(Json) ?? throw new JsonException($"Missing {ProviderId} embedding response.");
         result.Model = String(body, "model") ?? request.Model;
         return (result, body, NativeHttp.SafeResponseMetadataHeaders(upstream));
     }

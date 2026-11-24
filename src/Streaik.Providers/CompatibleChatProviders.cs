@@ -92,13 +92,15 @@ internal abstract class CompatibleChatProvider(IHttpClientFactory clients, IProv
     protected HttpClient CreateClient(string? name = null) => clients.CreateClient(name ?? id);
     protected string ApiKey() => RequiredKey(credentials, id);
     protected string? ConfiguredApiKey() => credentials.GetApiKey(id);
+    protected string ProviderId => id;
+    protected string CompatiblePath(string endpoint) => chatPrefix + endpoint;
 
     public virtual async Task<ChatCompletion> CompleteChatAsync(ChatCompletionOptions request, IReadOnlyDictionary<string, string> headers, CancellationToken ct)
     {
         var auth = Bearer(ApiKey());
         using var client = CreateClient();
         PrepareCompatibleRequest(request);
-        return await NativeHttp.PostAsync<ChatCompletionOptions, ChatCompletion>(client, chatPrefix + "chat/completions", request, auth, headers, Json, ct);
+        return await NativeHttp.PostAsync<ChatCompletionOptions, ChatCompletion>(client, CompatiblePath("chat/completions"), request, auth, headers, Json, ct);
     }
 
     public virtual async IAsyncEnumerable<ChatCompletionUpdate> StreamChatAsync(ChatCompletionOptions request, IReadOnlyDictionary<string, string> headers,
@@ -107,7 +109,7 @@ internal abstract class CompatibleChatProvider(IHttpClientFactory clients, IProv
         var auth = Bearer(ApiKey());
         using var client = CreateClient();
         PrepareCompatibleRequest(request);
-        await foreach (var part in NativeHttp.StreamAsync<ChatCompletionOptions, ChatCompletionUpdate>(client, chatPrefix + "chat/completions", request, auth, headers, Json, _ => false, ct))
+        await foreach (var part in NativeHttp.StreamAsync<ChatCompletionOptions, ChatCompletionUpdate>(client, CompatiblePath("chat/completions"), request, auth, headers, Json, _ => false, ct))
         {
             // Groq supplies streaming usage in an extension instead of the standard field.
             if (id == "groq" && part.Usage is null && part.AdditionalProperties?.TryGetValue("x_groq", out var groq) == true
@@ -150,7 +152,7 @@ internal abstract class CompatibleChatProvider(IHttpClientFactory clients, IProv
     protected virtual async Task<JsonElement> FetchModelsAsync(string key, CancellationToken ct)
     {
         using var client = CreateClient();
-        return await NativeHttp.GetAsync<JsonElement>(client, chatPrefix + "models", Bearer(key), ct);
+        return await NativeHttp.GetAsync<JsonElement>(client, CompatiblePath("models"), Bearer(key), ct);
     }
 
     protected virtual void PrepareCompatibleRequest(ChatCompletionOptions request)
