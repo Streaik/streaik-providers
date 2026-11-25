@@ -1,6 +1,9 @@
+using System.Globalization;
 using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Http;
 using Streaik.Vercel.Models;
 using static Streaik.Providers.MediaHttp;
@@ -46,13 +49,59 @@ internal sealed partial class EdgeSpeakProvider
                 ? ParseField(values.ToString()) : Value(values.ToString());
         }
         var format = OptionString(fields, "response_format");
+        if (string.IsNullOrEmpty(format)) format = "json";
         var rawStream = request["stream"].ToString();
         if (rawStream != "" && !bool.TryParse(rawStream, out _)) throw new ProviderRequestException("stream must be true or false.");
         var streaming = string.Equals(rawStream, "true", StringComparison.OrdinalIgnoreCase);
         var file = request.Files.GetFile("file") ?? throw new ProviderRequestException("EdgeSpeak requires an audio file.");
         await using var audio = file.OpenReadStream();
-        return await SendTranscriptionAsync(model, audio, file.ContentType, file.FileName, fields,
-            string.IsNullOrEmpty(format) ? "json" : format, streaming, headers, ct);
+        var upstream = await SendTranscriptionAsync(model, audio, file.ContentType, file.FileName, fields, format, streaming, headers, ct);
+        if (streaming || format == "text") return upstream;
+        using (upstream)
+        {
+            var raw = await NativeHttp.ReadAsync<JsonElement>(upstream, Json, ct);
+            return new(System.Net.HttpStatusCode.OK) { Content = JsonContent.Create(NativeTranscriptionBody(raw, format), options: Json) };
+        }
+    }
+
+    private static JsonObject NativeTranscriptionBody(JsonElement raw, string format)
+    {
+        _ = RequiredString(raw, "text");
+        var body = (JsonObject)Copy(raw)!;
+        if (body["usage"] is JsonObject usage && usage["type"] is null && Number(Property(raw, "usage"), "seconds") is not null)
+            usage["type"] = "duration";
+        if (format == "json") return body;
+
+        // Normalize required OpenAI fields without discarding EdgeSpeak's diagnostics or candidate data.
+        body["task"] = "transcribe";
+        body["duration"] = Number(raw, "duration") ?? throw new JsonException("EdgeSpeak transcription is missing duration.");
+        if (format == "verbose_json") body["language"] = RequiredString(raw, "language");
+        if (body["segments"] is not JsonArray segments) body["segments"] = segments = new JsonArray();
+        for (var i = 0; i < segments.Count; i++)
+        {
+            if (segments[i] is not JsonObject segment) throw new JsonException("Invalid EdgeSpeak transcription segment.");
+            if (format == "diarized_json")
+            {
+                segment["type"] = "transcript.text.segment";
+                segment["id"] = segment["id"]?.ToString() ?? i.ToString(CultureInfo.InvariantCulture);
+                segment["speaker"] ??= "unknown";
+                continue;
+            }
+            if (segment["id"] is not JsonValue id || !id.TryGetValue<int>(out _)) segment["id"] = i;
+            segment["seek"] ??= 0;
+            segment["tokens"] ??= new JsonArray();
+            segment["temperature"] ??= 0;
+            segment["avg_logprob"] ??= 0;
+            segment["compression_ratio"] ??= 0;
+            segment["no_speech_prob"] ??= 0;
+        }
+        if (format == "verbose_json" && body["words"] is null)
+        {
+            var words = segments.OfType<JsonObject>().SelectMany(segment => segment["words"] as JsonArray ?? [])
+                .Select(word => word?.DeepClone()).ToArray();
+            if (words.Length > 0) body["words"] = new JsonArray(words);
+        }
+        return body;
     }
 
     public async IAsyncEnumerable<StreamingTranscriptionPart> StreamTranscriptionAsync(StreamingTranscriptionRequest request,
