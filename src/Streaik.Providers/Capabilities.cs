@@ -19,7 +19,7 @@ public interface IChatBridgeProvider
     IChatCompletionsProvider ChatBridge { get; }
 }
 
-// Opt in to forwarding provider-scoped Vercel settings as native JSON extension fields.
+// Opt in to forwarding provider-scoped Vercel settings to the native chat protocol.
 public interface INativeChatOptionsProvider { }
 
 public interface IResponsesProvider

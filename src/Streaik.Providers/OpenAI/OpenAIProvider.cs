@@ -22,7 +22,7 @@ public sealed partial class OpenAIProvider(IHttpClientFactory clients, IProvider
     : IChatCompletionsProvider, IResponsesProvider, IModelListingProvider, IImageProvider, ISpeechProvider, ITranscriptionProvider,
       IEmbeddingsProvider, IRealtimeTokenProvider, IRealtimeSessionProvider, IContainerFilesProvider, IStreamingImagesProvider,
       IOpenAIRealtimeProvider, IOpenAILiveSessionProvider, INativeAudioTranscriptionProvider, IStreamingTranscriptionProvider, IDecisionsProvider,
-      ISkillReadProvider, ISkillUploadProvider
+      ISkillReadProvider, ISkillUploadProvider, INativeChatOptionsProvider
 {
     public const string Id = "openai";
 

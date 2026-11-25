@@ -54,8 +54,10 @@ public static class CompatibleChatProviderRegistration
 
     private sealed class DeepSeek(IHttpClientFactory clients, IProviderCredentials credentials) : CompatibleChatProvider(clients, credentials, "deepseek");
     private sealed class Groq(IHttpClientFactory clients, IProviderCredentials credentials) : CompatibleChatProvider(clients, credentials, "groq");
-    private sealed class Together(IHttpClientFactory clients, IProviderCredentials credentials) : CompatibleChatProvider(clients, credentials, "together");
-    private sealed class Cerebras(IHttpClientFactory clients, IProviderCredentials credentials) : CompatibleChatProvider(clients, credentials, "cerebras");
+    private sealed class Together(IHttpClientFactory clients, IProviderCredentials credentials)
+        : CompatibleChatProvider(clients, credentials, "together"), INativeChatOptionsProvider;
+    private sealed class Cerebras(IHttpClientFactory clients, IProviderCredentials credentials)
+        : CompatibleChatProvider(clients, credentials, "cerebras"), INativeChatOptionsProvider;
     private sealed class ArkRoute(IHttpClientFactory clients, IProviderCredentials credentials)
         : CompatibleChatProvider(clients, credentials, "arkroute"), INativeChatOptionsProvider;
     private sealed class CloudRift(IHttpClientFactory clients, IProviderCredentials credentials)
