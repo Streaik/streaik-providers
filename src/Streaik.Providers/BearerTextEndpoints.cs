@@ -27,7 +27,7 @@ internal class BearerTextEndpoints(IHttpClientFactory clients, IProviderCredenti
     private async Task<TResult> PostAsync<TRequest, TResult>(string path, TRequest request,
         IReadOnlyDictionary<string, string> headers, JsonSerializerOptions json, CancellationToken ct)
     {
-        using var client = clients.CreateClient(id);
+        using var client = CreateClient();
         return await NativeHttp.PostAsync<Dictionary<string, JsonElement>, TResult>(client, path,
             NativeOptionsPayload.Build(request, id, json, false), Auth(), headers, json, ct);
     }
@@ -35,12 +35,14 @@ internal class BearerTextEndpoints(IHttpClientFactory clients, IProviderCredenti
     private async IAsyncEnumerable<TEvent> StreamAsync<TRequest, TEvent>(string path, TRequest request,
         IReadOnlyDictionary<string, string> headers, JsonSerializerOptions json, Func<TEvent, bool> terminal, [EnumeratorCancellation] CancellationToken ct)
     {
-        using var client = clients.CreateClient(id);
+        using var client = CreateClient();
         await foreach (var part in NativeHttp.StreamAsync<Dictionary<string, JsonElement>, TEvent>(client, path,
             NativeOptionsPayload.Build(request, id, json, true), Auth(), headers, json, terminal, ct)) yield return part;
     }
 
-    private Action<HttpRequestHeaders> Auth()
+    protected HttpClient CreateClient(string? name = null) => clients.CreateClient(name ?? id);
+
+    protected Action<HttpRequestHeaders> Auth()
     {
         var key = MediaHttp.RequiredKey(credentials, id);
         return headers => headers.Authorization = new("Bearer", key);
