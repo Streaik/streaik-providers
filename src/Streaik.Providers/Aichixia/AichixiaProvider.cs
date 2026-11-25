@@ -8,7 +8,7 @@ public static class AichixiaRegistration
     public static IServiceCollection AddAichixia(this IServiceCollection services)
     {
         ProviderServiceCollectionExtensions.AddClient(services, AichixiaProvider.Id, "https://www.aichixia.xyz/api/v1/");
-        return services.AddProvider<AichixiaProvider>(AichixiaProvider.Id);
+        return services.AddProvider<AichixiaProvider>(AichixiaProvider.Id, "anthropic-version", "anthropic-beta");
     }
 }
 

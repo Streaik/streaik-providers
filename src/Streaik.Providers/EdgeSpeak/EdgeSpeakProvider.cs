@@ -1,5 +1,4 @@
 using System.Net.Http.Headers;
-using System.Net.Http.Json;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
@@ -27,7 +26,7 @@ public static class EdgeSpeakRegistration
             var root = uri.AbsoluteUri.TrimEnd('/');
             client.BaseAddress = new Uri(root.EndsWith("/v1", StringComparison.Ordinal) ? root + "/" : root + "/v1/");
         });
-        return services.AddProvider<EdgeSpeakProvider>(EdgeSpeakProvider.Id);
+        return services.AddProvider<EdgeSpeakProvider>(EdgeSpeakProvider.Id, "anthropic-version", "anthropic-beta");
     }
 }
 
