@@ -7,7 +7,7 @@ using Streaik.Responses.Streaming;
 
 namespace Streaik.Providers;
 
-internal class BearerTextEndpoints(IHttpClientFactory clients, IProviderCredentials credentials, string id)
+internal class BearerTextEndpoints(IHttpClientFactory clients, IProviderCredentials credentials, string id, bool allowAnonymous = false)
     : IResponsesProvider, IMessagesProvider, INativeChatOptionsProvider
 {
     public Task<ResponseResult> CreateResponseAsync(ResponseRequest request, IReadOnlyDictionary<string, string> headers, CancellationToken ct)
@@ -44,7 +44,8 @@ internal class BearerTextEndpoints(IHttpClientFactory clients, IProviderCredenti
 
     protected Action<HttpRequestHeaders> Auth()
     {
-        var key = MediaHttp.RequiredKey(credentials, id);
+        var key = allowAnonymous ? ConfiguredApiKey() : MediaHttp.RequiredKey(credentials, id);
+        if (string.IsNullOrWhiteSpace(key)) return _ => { };
         return headers => headers.Authorization = new("Bearer", key);
     }
 

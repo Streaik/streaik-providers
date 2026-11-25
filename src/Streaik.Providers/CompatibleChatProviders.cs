@@ -107,7 +107,7 @@ internal abstract class CompatibleChatProvider(IHttpClientFactory clients, IProv
 
     public virtual async Task<ChatCompletion> CompleteChatAsync(ChatCompletionOptions request, IReadOnlyDictionary<string, string> headers, CancellationToken ct)
     {
-        var auth = Bearer(ApiKey());
+        var auth = ChatAuth();
         using var client = CreateClient();
         PrepareCompatibleRequest(request);
         return await NativeHttp.PostAsync<object, ChatCompletion>(client, CompatiblePath("chat/completions"), ChatBody(request, false), auth, headers, Json, ct);
@@ -116,7 +116,7 @@ internal abstract class CompatibleChatProvider(IHttpClientFactory clients, IProv
     public virtual async IAsyncEnumerable<ChatCompletionUpdate> StreamChatAsync(ChatCompletionOptions request, IReadOnlyDictionary<string, string> headers,
         [EnumeratorCancellation] CancellationToken ct)
     {
-        var auth = Bearer(ApiKey());
+        var auth = ChatAuth();
         using var client = CreateClient();
         PrepareCompatibleRequest(request);
         await foreach (var part in NativeHttp.StreamAsync<object, ChatCompletionUpdate>(client, CompatiblePath("chat/completions"), ChatBody(request, true), auth, headers, Json, _ => false, ct))
@@ -175,5 +175,6 @@ internal abstract class CompatibleChatProvider(IHttpClientFactory clients, IProv
     }
 
     protected virtual ModelPricing? Pricing(JsonElement model) => null;
+    protected virtual Action<HttpRequestHeaders> ChatAuth() => Bearer(ApiKey());
     protected static Action<HttpRequestHeaders> Bearer(string key) => headers => headers.Authorization = new("Bearer", key);
 }
