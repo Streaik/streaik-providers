@@ -57,7 +57,7 @@ internal sealed class XaiProvider(IHttpClientFactory clients, IProviderCredentia
 
     public override async IAsyncEnumerable<Model> ListModelsAsync([EnumeratorCancellation] CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(credentials.GetApiKey("xai"))) yield break;
+        if (string.IsNullOrWhiteSpace(ConfiguredApiKey())) yield break;
         var voiceListed = false;
         await foreach (var model in base.ListModelsAsync(ct))
         {
