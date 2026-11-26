@@ -33,7 +33,7 @@ public sealed partial class EchoProvider : ILocalFixtureProvider, IModelListingP
         {
             (Plain, "Echo", "language", "Echoes the last user message."),
             (Reasoning, "Echo Reasoning", "language", "Echoes the last user message as both reasoning and answer."),
-            (InputRequired, "Echo Input Required", "language", "Requests an MCP form and echoes the submitted result."),
+            (InputRequired, "Echo Input Required", "language", "Requests an elicitation form and echoes the submitted result."),
             (ImageModel, "Echo Image Fixture", "image", "Returns a static PNG."),
             (VideoModel, "Echo Video Fixture", "video", "Returns a static WebM clip."),
             (SpeechModel, "Echo Speech Fixture", "speech", "Returns a short audio tone."),
