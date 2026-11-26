@@ -165,7 +165,7 @@ internal abstract class CompatibleChatProvider(IHttpClientFactory clients, IProv
             }
             var live = id == "google" && GoogleGeminiProvider.IsLiveModel(model)
                 || id == "xai" && model == XaiProvider.RealtimeModel;
-            var type = String(item, "type");
+            var type = id == "xai" && live ? "audio" : String(item, "type");
             var context = Property(item, "context_length");
             if (context.ValueKind != JsonValueKind.Number) context = Property(item, "context_window");
             yield return new Model { Id = model, Name = String(item, "display_name") ?? String(item, "name") ?? model,

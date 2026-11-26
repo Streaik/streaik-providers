@@ -55,6 +55,20 @@ internal sealed class XaiProvider(IHttpClientFactory clients, IProviderCredentia
 {
     internal const string RealtimeModel = "grok-voice-latest";
 
+    public override async IAsyncEnumerable<Model> ListModelsAsync([EnumeratorCancellation] CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(credentials.GetApiKey("xai"))) yield break;
+        var voiceListed = false;
+        await foreach (var model in base.ListModelsAsync(ct))
+        {
+            if (model.Id == RealtimeModel) voiceListed = true;
+            yield return model;
+        }
+        // The Voice Agent API has a fixed alias that the language-model directory may omit.
+        ct.ThrowIfCancellationRequested();
+        if (!voiceListed) yield return new() { Id = RealtimeModel, Name = "Grok Voice", Type = "audio", OwnedBy = "xai", Tags = ["realtime"] };
+    }
+
     public async Task<RealtimeTokenResponse> CreateRealtimeTokenAsync(string model, RealtimeTokenRequest request,
         IReadOnlyDictionary<string, string> headers, CancellationToken ct)
     {
