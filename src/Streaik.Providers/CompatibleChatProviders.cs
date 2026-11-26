@@ -37,6 +37,9 @@ public static class CompatibleChatProviderRegistration
     public static IServiceCollection AddDandolo(this IServiceCollection services)
         => Add<Dandolo>(services, "dandolo", "https://api.dandolo.ai/api/v1/");
 
+    public static IServiceCollection AddASIOne(this IServiceCollection services)
+        => Add<ASIOne>(services, "asione", "https://api.asi1.ai/v1/");
+
     public static IServiceCollection AddArkRoute(this IServiceCollection services)
         => Add<ArkRoute>(services, "arkroute", "https://api.ark-route.com/v1/");
 
@@ -69,6 +72,12 @@ public static class CompatibleChatProviderRegistration
         : CompatibleChatProvider(clients, credentials, "chutes"), INativeChatOptionsProvider;
     private sealed class Dandolo(IHttpClientFactory clients, IProviderCredentials credentials)
         : CompatibleChatProvider(clients, credentials, "dandolo"), INativeChatOptionsProvider;
+    private sealed class ASIOne(IHttpClientFactory clients, IProviderCredentials credentials)
+        : CompatibleChatProvider(clients, credentials, "asione"), INativeChatOptionsProvider
+    {
+        public override IAsyncEnumerable<Model> ListModelsAsync(CancellationToken ct)
+            => StaticModelListing.ListAsync(ProviderId, ConfiguredApiKey(), ct);
+    }
     private sealed class Crusoe(IHttpClientFactory clients, IProviderCredentials credentials)
         : CompatibleChatProvider(clients, credentials, "crusoe"), INativeChatOptionsProvider
     {
