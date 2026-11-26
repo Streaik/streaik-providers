@@ -59,10 +59,7 @@ internal sealed class LumaAIProvider(IHttpClientFactory clients, IProviderCreden
             var uri = image.ImageUrl;
             if (uri is null || !uri.StartsWith("data:image/", StringComparison.OrdinalIgnoreCase))
                 throw new ProviderRequestException("Luma image editing requires uploads or inline image data URLs.", 422);
-            var comma = uri.IndexOf(',');
-            if (comma is < 13 or > 128 || !uri[..comma].EndsWith(";base64", StringComparison.OrdinalIgnoreCase))
-                throw new ProviderRequestException("Invalid Luma image data URL.");
-            references.Add(ImageReference(uri[(comma + 1)..], uri[5..(comma - 7)], ref remaining));
+            references.Add(ImageReference(uri, null, ref remaining));
         }
         if (references.Count == 0) throw new ProviderRequestException("Luma image editing requires an image.");
         return await RunImageAsync(request.Model, request.Prompt, request.N, request.Size, request.AdditionalProperties,

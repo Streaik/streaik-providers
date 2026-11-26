@@ -100,10 +100,10 @@ internal sealed partial class FishAudioProvider(IHttpClientFactory clients, IPro
         var formatValue = options.GetValueOrDefault("format");
         if (outputFormat is null && formatValue.ValueKind is not (JsonValueKind.String or JsonValueKind.Null or JsonValueKind.Undefined))
             throw new ProviderRequestException("Fish Audio format must be a string.");
-        var format = (outputFormat ?? (formatValue.ValueKind == JsonValueKind.String ? formatValue.GetString() : null))?.ToLowerInvariant() switch
+        var format = (outputFormat ?? (formatValue.ValueKind == JsonValueKind.String ? formatValue.GetString() : null))?.Trim().ToLowerInvariant() switch
         {
-            null or "mp3" or "audio/mpeg" or "audio/mp3" => ("mp3", "audio/mpeg"),
-            "wav" or "audio/wav" or "audio/x-wav" => ("wav", "audio/wav"),
+            null or "" or "mp3" or "mpeg" or "audio/mpeg" or "audio/mp3" => ("mp3", "audio/mpeg"),
+            "wav" or "wave" or "audio/wav" or "audio/x-wav" => ("wav", "audio/wav"),
             "pcm" or "pcm16" or "raw" or "audio/pcm" or "audio/l16" => ("pcm", "audio/pcm"),
             "opus" or "ogg" or "audio/opus" or "audio/ogg" => ("opus", "audio/ogg"),
             _ => throw new ProviderRequestException("Unsupported Fish Audio speech format.", 422)
@@ -143,18 +143,23 @@ internal sealed partial class FishAudioProvider(IHttpClientFactory clients, IPro
         if (request.Text is not { Length: > 0 } || request.Text.Any(p => p?.Text is null || p.Type != "text"))
             throw new ProviderRequestException("At least one valid speech text part is required.");
         var text = string.Concat(request.Text.Select(p => p.Text));
+        if (string.IsNullOrWhiteSpace(text)) throw new ProviderRequestException("Speech text is required.");
         SpeechPlanData? plan = null;
+        JsonElement? configuration = null;
         foreach (var part in request.Text)
         {
             var options = Options(request.ProviderOptions);
             foreach (var field in Options(part.ProviderOptions)) options[field.Key] = field.Value;
-            var current = SpeechPlan(request.Model, text, part.Voice ?? request.Voice, request.OutputFormat?.Type,
+            var current = SpeechPlan(request.Model, "validation", part.Voice ?? request.Voice, request.OutputFormat?.Type,
                 request.Speed, request.Language, request.OutputFormat?.Rate, options, true);
-            if (plan is not null && !JsonElement.DeepEquals(JsonSerializer.SerializeToElement(plan.Body, Json), JsonSerializer.SerializeToElement(current.Body, Json)))
+            var normalized = JsonSerializer.SerializeToElement(current.Body, Json);
+            if (configuration is { } previous && !JsonElement.DeepEquals(previous, normalized))
                 throw new ProviderRequestException("Fish Audio requires one effective voice and options configuration across text parts.", 422);
+            configuration ??= normalized;
             plan ??= current;
         }
-        return SpeechEventsAsync(request.Model, request.Instructions, plan!, request.IncludeRawChunks == true, headers, ct);
+        plan!.Body["text"] = text;
+        return SpeechEventsAsync(request.Model, request.Instructions, plan, request.IncludeRawChunks == true, headers, ct);
     }
 
     private async IAsyncEnumerable<StreamingSpeechPart> SpeechEventsAsync(string model, string? instructions, SpeechPlanData plan, bool raw,
