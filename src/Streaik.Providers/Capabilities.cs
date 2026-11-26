@@ -45,5 +45,8 @@ public interface IProviderCredentials
     string? GetApiKey(string providerId);
 }
 
+// Opt-in for local, public test fixtures. No upstream credentials or private artifacts.
+public interface ILocalFixtureProvider { }
+
 public sealed class ProviderCredentialException(string providerId)
     : Exception($"No credentials configured for provider '{providerId}'.");

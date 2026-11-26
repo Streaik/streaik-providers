@@ -49,6 +49,7 @@ public static class ProviderServiceCollectionExtensions
         Register<IContainerFilesProvider>();
         Register<ISkillReadProvider>();
         Register<ISkillUploadProvider>();
+        Register<ILocalFixtureProvider>();
         return services;
 
         void Register<TCapability>() where TCapability : class
