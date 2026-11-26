@@ -7,7 +7,7 @@ internal static class NativeOptionsPayload
     private static readonly HashSet<string> Controls = new(StringComparer.OrdinalIgnoreCase)
     {
         "model", "stream", "store", "background", "previous_response_id", "conversation", "input", "messages",
-        "authorization", "api_key", "apiKey", "x-api-key", "headers"
+        "authorization", "api-key", "api_key", "apiKey", "x-api-key", "headers"
     };
 
     public static Dictionary<string, JsonElement> Build<T>(T request, string provider, JsonSerializerOptions json, bool? stream = null)
