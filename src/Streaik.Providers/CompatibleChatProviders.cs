@@ -127,13 +127,14 @@ internal abstract class CompatibleChatProvider(IHttpClientFactory clients, IProv
     protected string? ConfiguredApiKey() => credentials.GetApiKey(id);
     protected string ProviderId => id;
     protected string CompatiblePath(string endpoint) => chatPrefix + endpoint;
+    protected virtual string ChatEndpointPath => CompatiblePath("chat/completions");
 
     public virtual async Task<ChatCompletion> CompleteChatAsync(ChatCompletionOptions request, IReadOnlyDictionary<string, string> headers, CancellationToken ct)
     {
         var auth = ChatAuth();
         using var client = CreateClient();
         PrepareCompatibleRequest(request);
-        return await NativeHttp.PostAsync<object, ChatCompletion>(client, CompatiblePath("chat/completions"), ChatBody(request, false), auth, headers, Json, ct);
+        return await NativeHttp.PostAsync<object, ChatCompletion>(client, ChatEndpointPath, ChatBody(request, false), auth, headers, Json, ct);
     }
 
     public virtual async IAsyncEnumerable<ChatCompletionUpdate> StreamChatAsync(ChatCompletionOptions request, IReadOnlyDictionary<string, string> headers,
@@ -142,7 +143,7 @@ internal abstract class CompatibleChatProvider(IHttpClientFactory clients, IProv
         var auth = ChatAuth();
         using var client = CreateClient();
         PrepareCompatibleRequest(request);
-        await foreach (var part in NativeHttp.StreamAsync<object, ChatCompletionUpdate>(client, CompatiblePath("chat/completions"), ChatBody(request, true), auth, headers, Json, _ => false, ct))
+        await foreach (var part in NativeHttp.StreamAsync<object, ChatCompletionUpdate>(client, ChatEndpointPath, ChatBody(request, true), auth, headers, Json, _ => false, ct))
         {
             // Groq supplies streaming usage in an extension instead of the standard field.
             if (id == "groq" && part.Usage is null && part.AdditionalProperties?.TryGetValue("x_groq", out var groq) == true
