@@ -86,7 +86,7 @@ public static class AssemblyAIRegistration
 internal sealed class AssemblyAIProvider(IHttpClientFactory clients, IProviderCredentials credentials) : IRealtimeTokenProvider, IModelListingProvider
 {
     private const string Id = "assemblyai";
-    private static readonly string[] Models = ["universal-streaming-english", "universal-streaming-multilingual"];
+    private static readonly string[] Models = ["assemblyai-stt-3-7-realtime", "universal-streaming-english", "universal-streaming-multilingual"];
 
     public async IAsyncEnumerable<Model> ListModelsAsync([EnumeratorCancellation] CancellationToken ct)
     {

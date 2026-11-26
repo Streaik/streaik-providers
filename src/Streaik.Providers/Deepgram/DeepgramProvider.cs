@@ -159,7 +159,7 @@ public sealed class DeepgramProvider(IHttpClientFactory clients, IProviderCreden
         using var client = clients.CreateClient(Id);
         var response = await JsonAsync<JsonElement>(client, HttpMethod.Post, "v1/auth/grant", JsonContent.Create(new { ttl_seconds = ttl }), "Token", key, headers, ct);
         var url = new UriBuilder(client.BaseAddress!) { Scheme = "wss", Path = "/v1/listen", Query = "model=" + Uri.EscapeDataString(model) };
-        return new() { Token = String(response, "access_token") ?? throw new JsonException("Missing Deepgram token."), Url = url.Uri.AbsoluteUri,
+        return new() { Token = RealtimeOptions.Required(response, "access_token", key), Url = url.Uri.AbsoluteUri,
             ExpiresAt = DateTimeOffset.UtcNow.AddSeconds(Number(response, "expires_in") ?? ttl).ToUnixTimeSeconds() };
     }
 
