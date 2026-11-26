@@ -50,13 +50,13 @@ internal sealed class YollomiProvider(IHttpClientFactory clients, IProviderCrede
 
     public Task<OpenAIImagesResponse> GenerateImageAsync(OpenAIImageGenerationRequest request, IReadOnlyDictionary<string, string> headers, CancellationToken ct)
     {
-        var payload = BuildPayload(request.Model, request.Prompt, request.Size, request.N, request.Stream, request.AdditionalProperties);
-        return GenerateAsync(payload, request.OutputFormat, headers, ct);
+        var payload = BuildPayload(request, request.Model, request.Prompt, request.Size, request.N, request.Stream);
+        return GenerateAsync(payload, headers, ct);
     }
 
     public async Task<OpenAIImagesResponse> EditImageAsync(OpenAIImageEditRequest request, IReadOnlyDictionary<string, string> headers, CancellationToken ct)
     {
-        var payload = BuildPayload(request.Model, request.Prompt, request.Size, request.N, request.Stream, request.AdditionalProperties);
+        var payload = BuildPayload(request, request.Model, request.Prompt, request.Size, request.N, request.Stream);
         var images = new List<string>();
         var remaining = ImageLimit;
         foreach (var file in request.ImageFiles ?? []) images.Add(await UploadAsync(file));
@@ -67,7 +67,7 @@ internal sealed class YollomiProvider(IHttpClientFactory clients, IProviderCrede
         if (images.Count > 1) payload["images"] = images;
         if (request.MaskFile is { } maskFile) payload["mask"] = await UploadAsync(maskFile);
         else if (request.Mask is { } mask) payload["mask"] = InputReference(mask);
-        return await GenerateAsync(payload, request.OutputFormat, headers, ct);
+        return await GenerateAsync(payload, headers, ct);
 
         async Task<string> UploadAsync(IFormFile file)
         {
@@ -91,19 +91,20 @@ internal sealed class YollomiProvider(IHttpClientFactory clients, IProviderCrede
         throw new ProviderRequestException("Invalid Yollomi image reference.");
     }
 
-    private static Dictionary<string, object?> BuildPayload(string model, string prompt, string? size, int? count, bool? stream,
-        Dictionary<string, JsonElement>? options)
+    private static Dictionary<string, object?> BuildPayload<T>(T request, string model, string prompt, string? size, int? count, bool? stream)
     {
         if (stream == true && count > 1)
             throw new ProviderRequestException("Yollomi image streaming supports one image; use a non-streaming request for multiple images.");
+        var source = JsonSerializer.SerializeToElement(request, Json);
         var payload = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
-        if (options?.TryGetValue(Id, out var scoped) == true) AddOptions(scoped);
-        if (options?.TryGetValue("providerOptions", out var envelope) == true)
+        if (source.TryGetProperty(Id, out var scoped)) AddOptions(scoped);
+        if (source.TryGetProperty("providerOptions", out var envelope))
         {
             if (envelope.ValueKind != JsonValueKind.Object) throw new ProviderRequestException("providerOptions must be an object.");
             if (envelope.TryGetProperty(Id, out var native)) AddOptions(native);
         }
-        foreach (var (name, value) in options ?? []) AddOption(name, value);
+        foreach (var property in source.EnumerateObject())
+            if (property.Name is not ("images" or "mask")) AddOption(property.Name, property.Value);
         payload["type"] = "image";
         payload["modelId"] = model;
         payload["prompt"] = prompt;
@@ -131,7 +132,7 @@ internal sealed class YollomiProvider(IHttpClientFactory clients, IProviderCrede
         }
     }
 
-    private async Task<OpenAIImagesResponse> GenerateAsync(Dictionary<string, object?> payload, string? format,
+    private async Task<OpenAIImagesResponse> GenerateAsync(Dictionary<string, object?> payload,
         IReadOnlyDictionary<string, string> headers, CancellationToken ct)
     {
         using var client = clients.CreateClient(Id);
@@ -166,12 +167,19 @@ internal sealed class YollomiProvider(IHttpClientFactory clients, IProviderCrede
         {
             Created = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
             Data = data,
-            OutputFormat = detected ?? format ?? "png",
-            Size = payload.TryGetValue("size", out var size) ? size as string : null,
+            OutputFormat = detected ?? Setting("output_format") ?? "png",
+            Size = Setting("size"),
+            Quality = Setting("quality"),
+            Background = Setting("background") is { } background && !background.Equals("auto", StringComparison.OrdinalIgnoreCase) ? background : null,
             AdditionalProperties = new()
             {
                 ["providerMetadata"] = JsonSerializer.SerializeToElement(new Dictionary<string, object> { [Id] = metadata }, Json)
             }
+        };
+
+        string? Setting(string key) => payload.GetValueOrDefault(key) switch
+        {
+            string text => text, JsonElement { ValueKind: JsonValueKind.String } element => element.GetString(), _ => null
         };
     }
 

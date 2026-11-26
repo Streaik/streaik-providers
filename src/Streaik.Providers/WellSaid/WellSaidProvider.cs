@@ -79,14 +79,17 @@ internal sealed class WellSaidProvider(IHttpClientFactory clients, IProviderCred
         using var message = new HttpRequestMessage(HttpMethod.Post, "stream") { Content = JsonContent.Create(payload) };
         message.Headers.Add("X-Api-Key", RequiredKey(credentials, Id));
         message.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("audio/mpeg"));
-        var response = await NativeHttp.SendAsync(client, message, ct);
+        using var response = await NativeHttp.SendAsync(client, message, ct);
         if (!string.Equals(response.Content.Headers.ContentType?.MediaType, "audio/mpeg", StringComparison.OrdinalIgnoreCase)
             || response.Content.Headers.ContentLength == 0)
-        {
-            response.Dispose();
             throw new JsonException("Expected a non-empty WellSaid MP3 response.");
-        }
-        return response;
+        var responseHeaders = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (name, values) in response.Headers.Concat(response.Content.Headers)) responseHeaders[name] = string.Join(", ", values);
+        var safe = NativeHttp.SafeResponseMetadataHeaders(responseHeaders);
+        var result = new SpeechProviderResponse(response.Content,
+            new() { [Id] = JsonSerializer.SerializeToElement(new { headers = safe }, Json) });
+        response.Content = null; // The gateway owns the audio stream.
+        return result;
 
         void AddOptions(JsonElement native)
         {
