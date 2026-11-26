@@ -24,7 +24,7 @@ public sealed class DeepgramProvider(IHttpClientFactory clients, IProviderCreden
     : ISpeechProvider, ITranscriptionProvider, IStreamingTranscriptionProvider, IRealtimeTokenProvider, IModelListingProvider
 {
     public const string Id = "deepgram";
-    private static readonly string[] TranscriptionOptions = ["diarize", "detect_language", "smart_format", "punctuate", "utterances", "numerals", "profanity_filter", "encoding", "sample_rate", "channels", "keyterm", "keywords", "mip_opt_out"];
+    private static readonly string[] TranscriptionOptions = ["language", "diarize", "detect_language", "smart_format", "punctuate", "utterances", "numerals", "profanity_filter", "encoding", "sample_rate", "channels", "keyterm", "keywords", "mip_opt_out"];
 
     public async IAsyncEnumerable<Model> ListModelsAsync([EnumeratorCancellation] CancellationToken ct)
     {
