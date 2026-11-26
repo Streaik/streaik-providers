@@ -259,10 +259,10 @@ internal sealed class RimeProvider(IHttpClientFactory clients, IProviderCredenti
 
     private static Dictionary<string, string> ResponseHeaders(HttpResponseMessage response, string mime)
     {
-        var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["Content-Type"] = mime };
+        var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["content-type"] = mime };
         foreach (var header in response.Headers)
             if (header.Key.StartsWith("x-rime-", StringComparison.OrdinalIgnoreCase) || header.Key.Equals("x-request-id", StringComparison.OrdinalIgnoreCase))
-                headers[header.Key] = string.Join(", ", header.Value);
+                headers[header.Key.ToLowerInvariant()] = string.Join(", ", header.Value);
         return headers;
     }
 
