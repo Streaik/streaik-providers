@@ -26,10 +26,11 @@ internal sealed partial class GoogleGeminiProvider : IEmbeddingsProvider, IImage
     public async Task<OpenAIImagesResponse> GenerateImageAsync(OpenAIImageGenerationRequest request, IReadOnlyDictionary<string, string> headers, CancellationToken ct)
     {
         var model = NormalizeModel(request.Model);
-        var mime = ImageMime(request.OutputFormat);
+        var imagen = model.StartsWith("imagen-", StringComparison.OrdinalIgnoreCase);
+        var mime = imagen && request.OutputFormat is null ? "image/png" : ImageMime(request.OutputFormat);
         var count = request.N ?? 1;
         var format = GoogleImageFormat(request.Size, mime, request.AdditionalProperties);
-        if (model.StartsWith("imagen-", StringComparison.OrdinalIgnoreCase))
+        if (imagen)
         {
             if (count is < 1 or > 4) throw new ProviderRequestException("Imagen requires n between 1 and 4.");
             var predictions = await PostGoogleJsonAsync($"v1beta/models/{model}:predict", new JsonObject
@@ -187,7 +188,7 @@ internal sealed partial class GoogleGeminiProvider : IEmbeddingsProvider, IImage
 
     private static string ImageMime(string? value) => value?.ToLowerInvariant() switch
     {
-        null or "png" or "image/png" => "image/png", "jpg" or "jpeg" or "image/jpeg" => "image/jpeg",
+        null or "jpg" or "jpeg" or "image/jpeg" => "image/jpeg", "png" or "image/png" => "image/png",
         "webp" or "image/webp" => "image/webp", _ => throw new ProviderRequestException("Unsupported image output format.", 422)
     };
 
