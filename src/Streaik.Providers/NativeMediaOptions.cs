@@ -12,6 +12,10 @@ internal static class NativeMediaOptions
         "providerOptions", "providerMetadata", "authorization", "api-key", "api_key", "apiKey", "x-api-key", "headers"
     };
 
+    internal static Dictionary<string, JsonElement> ReadScoped(string id, IReadOnlyDictionary<string, JsonElement>? options,
+        IReadOnlySet<string> reserved)
+        => Read(id, options?.TryGetValue(id, out var native) == true ? new Dictionary<string, JsonElement> { [id] = native } : null, reserved);
+
     internal static Dictionary<string, JsonElement> Read(string id, IReadOnlyDictionary<string, JsonElement>? options,
         IReadOnlySet<string> reserved)
     {

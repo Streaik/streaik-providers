@@ -17,12 +17,17 @@ internal static class CompatibleImageGeneration
         using var response = await SendAsync(client, HttpMethod.Post, path, JsonContent.Create(payload, options: Json),
             "Bearer", key, headers, ct);
         var body = await NativeHttp.ReadAsync<JsonElement>(response, Json, ct);
+        return ReadResult(body, provider, request.OutputFormat ?? "png");
+    }
+
+    internal static OpenAIImagesResponse ReadResult(JsonElement body, string provider, string fallbackFormat)
+    {
         var result = body.Deserialize<OpenAIImagesResponse>(Json) ?? throw new JsonException("Missing image response.");
         if (result.Data is not { Count: > 0 } || Array(Property(body, "data")).Any(image =>
             string.IsNullOrWhiteSpace(String(image, "b64_json")) && string.IsNullOrWhiteSpace(String(image, "url"))))
             throw new JsonException("The provider returned no usable images.");
 
-        result.OutputFormat ??= request.OutputFormat ?? "png";
+        result.OutputFormat ??= fallbackFormat;
         if (Property(body, "created").ValueKind == JsonValueKind.Undefined)
             result.Created = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         var metadata = (result.AdditionalProperties ??= new(StringComparer.Ordinal));

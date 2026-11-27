@@ -12,10 +12,7 @@ internal static class PublicMediaDelivery
 
     internal static async Task<(string Data, string Mime)> DownloadAsync(HttpClient client, string url, string fallback, int limit, CancellationToken ct)
     {
-        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps || !uri.IsDefaultPort
-            || uri.HostNameType != UriHostNameType.Dns || uri.UserInfo.Length != 0 || uri.Fragment.Length != 0)
-            throw new IOException("Untrusted provider media URL.");
-        using var request = new HttpRequestMessage(HttpMethod.Get, uri);
+        using var request = new HttpRequestMessage(HttpMethod.Get, RequirePublicHttpsUri(url));
         using var result = await NativeHttp.SendAsync(client, request, ct);
         var mime = result.Content.Headers.ContentType?.MediaType;
         if (mime is null or "application/octet-stream") mime = fallback;
@@ -25,6 +22,11 @@ internal static class PublicMediaDelivery
         await using var stream = await result.Content.ReadAsStreamAsync(ct);
         return (await BoundedBase64Async(stream, limit, ct), mime.ToLowerInvariant());
     }
+
+    internal static Uri RequirePublicHttpsUri(string? url)
+        => Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps && uri.IsDefaultPort
+            && uri.HostNameType == UriHostNameType.Dns && uri.UserInfo.Length == 0 && uri.Fragment.Length == 0
+                ? uri : throw new IOException("Untrusted provider media URL.");
 
     internal static SocketsHttpHandler CreateHandler() => new()
     {

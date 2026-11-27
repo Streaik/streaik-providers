@@ -44,15 +44,15 @@ internal static class NativeHttp
 
     public static async IAsyncEnumerable<TEvent> StreamAsync<TRequest, TEvent>(HttpClient client, string path, TRequest body,
         Action<HttpRequestHeaders> auth, IReadOnlyDictionary<string, string> headers, JsonSerializerOptions json,
-        Func<TEvent, bool> terminal, [EnumeratorCancellation] CancellationToken ct)
+        Func<TEvent, bool> terminal, [EnumeratorCancellation] CancellationToken ct, Func<bool>? endOnKeepaliveOrEof = null)
     {
         using var request = Post(path, body, auth, headers, json, "text/event-stream");
         using var response = await SendAsync(client, request, ct);
-        await foreach (var part in ReadSseAsync(response, json, terminal, ct)) yield return part;
+        await foreach (var part in ReadSseAsync(response, json, terminal, ct, endOnKeepaliveOrEof)) yield return part;
     }
 
     internal static async IAsyncEnumerable<TEvent> ReadSseAsync<TEvent>(HttpResponseMessage response, JsonSerializerOptions json,
-        Func<TEvent, bool> terminal, [EnumeratorCancellation] CancellationToken ct)
+        Func<TEvent, bool> terminal, [EnumeratorCancellation] CancellationToken ct, Func<bool>? endOnKeepaliveOrEof = null)
     {
         if (response.Content.Headers.ContentType?.MediaType != "text/event-stream")
             throw new HttpRequestException("Expected an upstream event stream.");
@@ -61,6 +61,7 @@ internal static class NativeHttp
         var data = new List<string>();
         while (await reader.ReadLineAsync(ct) is { } line)
         {
+            if (line.StartsWith(':') && data.Count == 0 && endOnKeepaliveOrEof?.Invoke() == true) yield break;
             if (line.StartsWith("data:", StringComparison.Ordinal)) { data.Add(line[5..].TrimStart(' ')); continue; }
             if (line.Length != 0 || data.Count == 0) continue;
             var payload = string.Join('\n', data);
@@ -70,6 +71,7 @@ internal static class NativeHttp
             yield return value;
             if (terminal(value)) yield break;
         }
+        if (endOnKeepaliveOrEof?.Invoke() == true) yield break;
         throw new IOException("The upstream did not send a terminal event.");
     }
 
