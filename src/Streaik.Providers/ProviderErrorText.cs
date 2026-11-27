@@ -52,8 +52,12 @@ internal static partial class ProviderErrorText
     private static JsonElement Property(JsonElement value, string name) =>
         value.ValueKind == JsonValueKind.Object && value.TryGetProperty(name, out var property) ? property : default;
 
-    private static string? ReadString(JsonElement value) => value.ValueKind == JsonValueKind.String
-        && value.GetString() is { } text && !string.IsNullOrWhiteSpace(text) ? text : null;
+    private static string? ReadString(JsonElement value)
+    {
+        if (value.ValueKind != JsonValueKind.String) return null;
+        try { return value.GetString() is { } text && !string.IsNullOrWhiteSpace(text) ? text : null; }
+        catch (InvalidOperationException) { return null; } // Invalid UTF-8 or an unpaired Unicode escape.
+    }
 
     internal static bool IsCredentialHeader(string name) => name.Equals("Authorization", StringComparison.OrdinalIgnoreCase)
         || name.Equals("Proxy-Authorization", StringComparison.OrdinalIgnoreCase)
