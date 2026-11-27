@@ -13,11 +13,11 @@ public sealed partial class OpenRouterProvider
 {
     private const int MaxInlineMediaBytes = 32 * 1024 * 1024;
 
-    public Task<OpenAIImagesResponse> GenerateImageAsync(OpenAIImageGenerationRequest request, IReadOnlyDictionary<string, string> headers, CancellationToken ct)
-        => PostAsync<JsonObject, OpenAIImagesResponse>("v1/images", ImageBody(ToObject(request)), headers, ct);
+    public async Task<OpenAIImagesResponse> GenerateImageAsync(OpenAIImageGenerationRequest request, IReadOnlyDictionary<string, string> headers, CancellationToken ct)
+        => ImageProviderUsage.Read(await PostAsync<JsonObject, JsonElement>("v1/images", ImageBody(ToObject(request)), headers, ct), Json);
 
     public async Task<OpenAIImagesResponse> EditImageAsync(OpenAIImageEditRequest request, IReadOnlyDictionary<string, string> headers, CancellationToken ct)
-        => await PostAsync<JsonObject, OpenAIImagesResponse>("v1/images", await EditBodyAsync(request, ct), headers, ct);
+        => ImageProviderUsage.Read(await PostAsync<JsonObject, JsonElement>("v1/images", await EditBodyAsync(request, ct), headers, ct), Json);
 
     public IAsyncEnumerable<JsonElement> StreamImagesAsync(OpenAIImageGenerationRequest request, IReadOnlyDictionary<string, string> headers, CancellationToken ct)
         => StreamAsync<JsonObject, JsonElement>("v1/images", ImageBody(ToObject(request)), headers, Json, _ => false, ct);
@@ -171,7 +171,10 @@ public sealed partial class OpenRouterProvider
             videos.Add(new() { Type = "base64", MediaType = mime is null or "application/octet-stream" ? "video/mp4" : mime,
                 Data = await BoundedBase64Async(input, MaxInlineMediaBytes / count, ct) });
         }
-        return new VideoOperationCompletedResult { Videos = videos, Response = new() { ModelId = model, Timestamp = DateTime.UtcNow } };
+        var usage = Property(result, "usage");
+        return new VideoOperationCompletedResult { Videos = videos, Response = new() { ModelId = model, Timestamp = DateTime.UtcNow },
+            ProviderMetadata = usage.ValueKind == JsonValueKind.Object
+                ? new() { [Id] = JsonSerializer.SerializeToElement(new { usage }, Json) } : null };
     }
 
     private static bool ValidVideoId(string? value) => value is { Length: > 0 and <= 256 } && value.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_');
