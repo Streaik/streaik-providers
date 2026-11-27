@@ -99,8 +99,25 @@ internal static class NativeHttp
     {
         var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
         if (response.IsSuccessStatusCode) return response;
-        using (response) response.EnsureSuccessStatusCode();
-        throw new HttpRequestException("Unexpected upstream response.");
+        using (response)
+        {
+            await EnsureSuccessAsync(response, request, client.DefaultRequestHeaders, ct);
+            throw new HttpRequestException("Unexpected upstream response.");
+        }
+    }
+
+    internal static async Task EnsureSuccessAsync(HttpResponseMessage response, HttpRequestMessage request,
+        HttpRequestHeaders defaultHeaders, CancellationToken ct)
+    {
+        if (response.IsSuccessStatusCode) return;
+        if ((int)response.StatusCode >= 400 && await ProviderErrorText.ReadAsync(response, ct) is { } message)
+        {
+            var credentials = request.Headers.Concat(defaultHeaders).Where(header => ProviderErrorText.IsCredentialHeader(header.Key))
+                .SelectMany(header => header.Value).SelectMany(ProviderErrorText.CredentialValues);
+            if (ProviderErrorText.Sanitize(message, credentials) is { } diagnostic)
+                throw new UpstreamHttpException(response.StatusCode, diagnostic);
+        }
+        response.EnsureSuccessStatusCode();
     }
 
     internal static async Task<T> ReadAsync<T>(HttpResponseMessage response, JsonSerializerOptions json, CancellationToken ct)
