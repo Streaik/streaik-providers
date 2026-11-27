@@ -24,18 +24,20 @@ public sealed class AnthropicProvider(IHttpClientFactory clients, IProviderCrede
     public async Task<MessagesResponse> CreateMessageAsync(MessagesRequest request, IReadOnlyDictionary<string, string> headers, CancellationToken ct)
     {
         var key = RequireKey();
+        var version = RequireVersion(request, headers);
         using var client = clients.CreateClient(Id);
         return await NativeHttp.PostAsync<MessagesRequest, MessagesResponse>(client, "v1/messages", request, h =>
-            Authenticate(h, key, headers.GetValueOrDefault("anthropic-version")), headers, MessagesJson.Default, ct);
+            Authenticate(h, key, version), headers, MessagesJson.Default, ct);
     }
 
     public async IAsyncEnumerable<MessageStreamPart> StreamMessageAsync(MessagesRequest request,
         IReadOnlyDictionary<string, string> headers, [EnumeratorCancellation] CancellationToken ct)
     {
         var key = RequireKey();
+        var version = RequireVersion(request, headers);
         using var client = clients.CreateClient(Id);
         await foreach (var part in NativeHttp.StreamAsync<MessagesRequest, MessageStreamPart>(client, "v1/messages", request,
-            h => Authenticate(h, key, headers.GetValueOrDefault("anthropic-version")), headers, MessagesJson.Default,
+            h => Authenticate(h, key, version), headers, MessagesJson.Default,
             part => part.Type is "message_stop" or "error", ct)) yield return part;
     }
 
@@ -48,7 +50,7 @@ public sealed class AnthropicProvider(IHttpClientFactory clients, IProviderCrede
         var cursors = new HashSet<string>(StringComparer.Ordinal);
         while (true)
         {
-            var page = await NativeHttp.GetAsync<ModelPage>(client, path, h => Authenticate(h, key), ct, ProviderModelJson.Options);
+            var page = await NativeHttp.GetAsync<ModelPage>(client, path, h => Authenticate(h, key, "2023-06-01"), ct, ProviderModelJson.Options);
             foreach (var model in page.Data) yield return model;
 
             if (!page.HasMore) yield break;
@@ -64,9 +66,16 @@ public sealed class AnthropicProvider(IHttpClientFactory clients, IProviderCrede
     private sealed record ModelPage(List<Model> Data, [property: JsonPropertyName("has_more")] bool HasMore,
         [property: JsonPropertyName("last_id")] string? LastId);
 
-    private static void Authenticate(HttpRequestHeaders headers, string key, string? version = null)
+    private static string RequireVersion(MessagesRequest request, IReadOnlyDictionary<string, string> headers)
+    {
+        if (request.MaxTokens <= 0) throw new ProviderRequestException("Anthropic requires a positive max_tokens value.");
+        var version = headers.FirstOrDefault(header => header.Key.Equals("anthropic-version", StringComparison.OrdinalIgnoreCase)).Value;
+        return !string.IsNullOrWhiteSpace(version) ? version : throw new ProviderRequestException("Anthropic requires the anthropic-version header.");
+    }
+
+    private static void Authenticate(HttpRequestHeaders headers, string key, string version)
     {
         headers.Add("x-api-key", key);
-        headers.Add("anthropic-version", version ?? "2023-06-01");
+        headers.Add("anthropic-version", version);
     }
 }
