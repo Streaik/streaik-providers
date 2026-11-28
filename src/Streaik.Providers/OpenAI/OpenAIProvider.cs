@@ -51,6 +51,9 @@ public sealed partial class OpenAIProvider(IHttpClientFactory clients, IProvider
             client, "v1/models", h => Authenticate(h, key),
             ct, ProviderModelJson.Options);
 
+        const string luna = "gpt-6-luna";
+        Model? lunaDecision = null;
+        var hasLunaDecision = false;
         foreach (var model in page.Data.Where(a => a.ShutdownDate is null))
         {
             if (model.Id.StartsWith("gpt-live")
@@ -66,8 +69,21 @@ public sealed partial class OpenAIProvider(IHttpClientFactory clients, IProvider
                 model.Type = "language";
             }
 
+            if (model.Id == luna)
+            {
+                if (string.Equals(model.Type?.Trim(), "decision", StringComparison.OrdinalIgnoreCase))
+                    hasLunaDecision = true;
+                else
+                    lunaDecision ??= new Model { Id = luna, Type = "decision", Name = model.Name, OwnedBy = model.OwnedBy,
+                        Created = model.Created, ContextWindow = model.ContextWindow };
+            }
+
             yield return model;
         }
+
+        // Luna supports both endpoints, but upstream may list only its language model.
+        // Don't advertise it to callers who can't see it, or duplicate a native Decision entry.
+        if (!hasLunaDecision && lunaDecision is not null) yield return lunaDecision;
     }
 
     private async Task<TResult> PostAsync<TRequest, TResult>(string path, TRequest request, IReadOnlyDictionary<string, string> headers,
