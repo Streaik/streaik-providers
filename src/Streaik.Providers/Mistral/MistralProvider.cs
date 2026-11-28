@@ -39,8 +39,9 @@ internal sealed partial class MistralProvider(IHttpClientFactory clients, IProvi
         var body = ResponseBody(request, false);
         if (IsOcrModel(request.Model)) return OcrResponse(request.Model!, await ReadOcrAsync(request.Model!, ResponseOcrFiles(body), body, headers, ct));
         using var client = CreateClient();
-        return await NativeHttp.PostAsync<JsonObject, ResponseResult>(client, "responses", body,
+        var raw = await NativeHttp.PostAsync<JsonObject, JsonElement>(client, "responses", body,
             Bearer(ApiKey()), headers, ResponseJson.Default, ct);
+        return ReadResponse<ResponseResult>(raw, stream: false);
     }
 
     public async IAsyncEnumerable<ResponseStreamPart> StreamResponseAsync(ResponseRequest request,
@@ -59,12 +60,28 @@ internal sealed partial class MistralProvider(IHttpClientFactory clients, IProvi
         await foreach (var raw in NativeHttp.StreamAsync<JsonObject, JsonElement>(client, "responses", body, Bearer(ApiKey()), headers,
             ResponseJson.Default, _ => terminal, ct))
         {
-            var data = Unwrap(raw, "type");
-            var part = data.Deserialize<ResponseStreamPart>(ResponseJson.Default) ?? throw new JsonException("Missing Mistral Responses event.");
+            var part = ReadResponse<ResponseStreamPart>(Unwrap(raw, "type"), stream: true);
             terminal = part.Type is "response.completed" or "response.failed" or "response.incomplete" or "error";
             yield return part;
         }
         if (!terminal) throw new IOException("Mistral Responses ended before a terminal event.");
+    }
+
+    private static T ReadResponse<T>(JsonElement data, bool stream) where T : class
+    {
+        // Mistral sends completion times as decimal Unix seconds (e.g. 1795852935.0).
+        // Normalize only that field to the Responses contract's whole seconds.
+        var completed = Property(stream ? Property(data, "response") : data, "completed_at");
+        if (completed.ValueKind == JsonValueKind.Number && !completed.TryGetInt64(out _)
+            && completed.TryGetDecimal(out var seconds) && seconds is >= long.MinValue and <= long.MaxValue)
+        {
+            var root = JsonNode.Parse(data.GetRawText())!.AsObject();
+            var response = stream ? root["response"]!.AsObject() : root;
+            response["completed_at"] = (long)seconds;
+            return root.Deserialize<T>(ResponseJson.Default) ?? throw new JsonException("Missing Mistral Responses payload.");
+        }
+
+        return data.Deserialize<T>(ResponseJson.Default) ?? throw new JsonException("Missing Mistral Responses payload.");
     }
 
     private static JsonObject ResponseBody(ResponseRequest request, bool stream)

@@ -63,13 +63,14 @@ internal sealed partial class MistralProvider
             var toolNames = new Dictionary<string, string>(StringComparer.Ordinal);
             foreach (var message in messages.OfType<JsonObject>())
             {
-                if (NodeString(message["role"]) == "developer") message["role"] = "system";
+                var role = NodeString(message["role"]);
+                if (role == "developer") message["role"] = "system";
                 if (message["tool_calls"] is JsonArray calls)
                     foreach (var call in calls.OfType<JsonObject>())
                         if (NodeString(call["id"]) is { } id && call["function"] is JsonObject function
                             && NodeString(function["name"]) is { } name)
                             toolNames[id] = name;
-                if (NodeString(message["role"]) == "tool" && NodeString(message["tool_call_id"]) is { } toolId
+                if (role == "tool" && NodeString(message["tool_call_id"]) is { } toolId
                     && message["name"] is null && toolNames.TryGetValue(toolId, out var toolName))
                     message["name"] = toolName;
 
@@ -86,6 +87,9 @@ internal sealed partial class MistralProvider
                     }
                     else if (NodeString(part["type"]) == "input_audio" && part["input_audio"] is JsonObject audio)
                         part["input_audio"] = audio["data"]?.DeepClone();
+                    else if (role == "assistant" && NodeString(part["type"]) == "thinking" && NodeString(part["thinking"]) is { } thought)
+                        // The gateway replays thinking as text; Mistral accepts typed chunks inside a thinking block.
+                        part["thinking"] = new JsonArray(new JsonObject { ["type"] = "text", ["text"] = thought });
                 }
             }
         }
