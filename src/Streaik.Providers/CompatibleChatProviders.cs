@@ -22,6 +22,9 @@ public static class CompatibleChatProviderRegistration
     public static IServiceCollection AddCerebras(this IServiceCollection services)
         => Add<Cerebras>(services, "cerebras", "https://api.cerebras.ai/v1/");
 
+    public static IServiceCollection AddAskCodi(this IServiceCollection services)
+        => Add<AskCodi>(services, "askcodi", "https://api.askcodi.com/v1/");
+
     public static IServiceCollection AddMoonshot(this IServiceCollection services)
         => Add<Moonshot>(services, "moonshot", "https://api.moonshot.ai/v1/");
 
@@ -67,6 +70,8 @@ public static class CompatibleChatProviderRegistration
         : CompatibleChatProvider(clients, credentials, "together"), INativeChatOptionsProvider;
     private sealed class Cerebras(IHttpClientFactory clients, IProviderCredentials credentials)
         : CompatibleChatProvider(clients, credentials, "cerebras"), INativeChatOptionsProvider;
+    private sealed class AskCodi(IHttpClientFactory clients, IProviderCredentials credentials)
+        : CompatibleChatProvider(clients, credentials, "askcodi"), INativeChatOptionsProvider;
     private sealed class ArkRoute(IHttpClientFactory clients, IProviderCredentials credentials)
         : CompatibleChatProvider(clients, credentials, "arkroute"), INativeChatOptionsProvider;
     private sealed class CloudRift(IHttpClientFactory clients, IProviderCredentials credentials)
