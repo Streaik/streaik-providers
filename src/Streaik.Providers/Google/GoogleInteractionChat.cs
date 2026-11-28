@@ -59,8 +59,7 @@ internal sealed partial class GoogleGeminiProvider : IChatBridgeProvider
         var id = default(string);
         var result = default(JsonElement);
         var accumulated = new StringBuilder();
-        var functionSteps = new SortedDictionary<int, JsonObject>();
-        var functionArgs = new Dictionary<int, StringBuilder>();
+        var streamSteps = new InteractionChatSteps();
         ChatCompletionUsage? usageFromStream = null;
         try
         {
@@ -85,25 +84,8 @@ internal sealed partial class GoogleGeminiProvider : IChatBridgeProvider
                         // total_usage is cumulative, and can arrive on events without a step index.
                         if (includeUsage)
                             usageFromStream = ParseInteractionUsage(Property(Property(item, "metadata"), "total_usage")) ?? usageFromStream;
+                        streamSteps.Observe(item, type);
                         var delta = Property(item, "delta");
-                        var index = Property(item, "index");
-                        if (index.ValueKind == JsonValueKind.Number && index.TryGetInt32(out var stepIndex))
-                        {
-                            var step = Property(item, "step");
-                            if (type == "step.start" && String(step, "type") == "function_call")
-                                functionSteps[stepIndex] = (JsonObject)Copy(step)!;
-                            if (type == "step.delta" && functionSteps.TryGetValue(stepIndex, out var current) && String(delta, "type") == "function_call")
-                            {
-                                if (String(delta, "signature") is { } signature) current["signature"] = signature;
-                                var args = Property(delta, "arguments");
-                                if (args.ValueKind == JsonValueKind.Object) current["arguments"] = Copy(args);
-                                if (args.ValueKind == JsonValueKind.String)
-                                {
-                                    if (!functionArgs.TryGetValue(stepIndex, out var buffer)) functionArgs[stepIndex] = buffer = new();
-                                    buffer.Append(args.GetString());
-                                }
-                            }
-                        }
                         if (type == "step.delta" && String(delta, "type") == "text" && String(delta, "text") is { Length: > 0 } text)
                         {
                             accumulated.Append(text);
@@ -116,15 +98,8 @@ internal sealed partial class GoogleGeminiProvider : IChatBridgeProvider
             result = await WaitForChatAsync(result, id, body.Store == true, ct);
             if (ChatText(result) is { } full && full.StartsWith(accumulated.ToString(), StringComparison.Ordinal) && full.Length > accumulated.Length)
                 yield return Chunk(full[accumulated.Length..]);
-            var calls = FunctionSteps(result).Select(FunctionCall).ToList();
-            if (calls.Count == 0)
-            {
-                foreach (var (index, step) in functionSteps)
-                {
-                    if (functionArgs.TryGetValue(index, out var arguments)) step["arguments"] = JsonNode.Parse(arguments.ToString());
-                    calls.Add(FunctionCall(JsonSerializer.SerializeToElement(step, Json)));
-                }
-            }
+            var steps = streamSteps.Complete(result);
+            var calls = steps.Where(step => String(step, "type") == "function_call").Select(FunctionCall).ToList();
             for (var i = 0; i < calls.Count; i++)
             {
                 var call = calls[i];
@@ -133,7 +108,8 @@ internal sealed partial class GoogleGeminiProvider : IChatBridgeProvider
                         { Index = i, Id = call.Id, Type = "function", Function = new() { Name = call.Function.Name, Arguments = call.Function.Arguments } }] } }] };
             }
             yield return new ChatCompletionUpdate { Id = completionId, Created = created, Model = request.Model,
-                Choices = [new() { Index = 0, Delta = new(), FinishReason = FinishReason(result, calls.Count) }] };
+                Choices = [new() { Index = 0, Delta = new(), FinishReason = FinishReason(result, calls.Count) }],
+                AdditionalProperties = body.Store == false ? CaptureInteractionReplay(request.Model, steps) : null };
             if (includeUsage && (ParseInteractionUsage(Property(result, "usage")) ?? usageFromStream) is { } usage)
                 yield return new ChatCompletionUpdate { Id = completionId, Created = created, Model = request.Model, Usage = usage };
         }
@@ -160,7 +136,8 @@ internal sealed partial class GoogleGeminiProvider : IChatBridgeProvider
                 case "system": case "developer": instructions.Add(ReadText(content)); break;
                 case "user": AddStep("user_input", ChatContent(content)); break;
                 case "assistant":
-                    AddStep("model_output", ChatContent(content));
+                    var output = ChatContent(content);
+                    var calls = new List<JsonObject>();
                     foreach (var call in Array(Property(message, "tool_calls")))
                     {
                         var function = Property(call, "function");
@@ -171,7 +148,16 @@ internal sealed partial class GoogleGeminiProvider : IChatBridgeProvider
                         var next = new JsonObject { ["type"] = "function_call", ["id"] = id, ["name"] = name,
                             ["arguments"] = ParseArguments(String(function, "arguments")) };
                         if (signature is not null) next["signature"] = signature;
-                        steps.Add(next);
+                        calls.Add(next);
+                    }
+                    if (!isAgent && TryReplayInteractionRound(Property(message, InteractionReplayKey), request.Model, output, calls) is { } replay)
+                    {
+                        foreach (var step in replay) steps.Add(step);
+                    }
+                    else
+                    {
+                        AddStep("model_output", output);
+                        foreach (var call in calls) steps.Add(call);
                     }
                     break;
                 case "tool":
