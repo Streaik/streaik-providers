@@ -24,16 +24,18 @@ public sealed class DeepgramProvider(IHttpClientFactory clients, IProviderCreden
     : ISpeechProvider, ITranscriptionProvider, IStreamingTranscriptionProvider, IRealtimeTokenProvider, IModelListingProvider
 {
     public const string Id = "deepgram";
+    private const string RealtimeSpeechModel = "aura-2-asteria-en";
     private static readonly string[] TranscriptionOptions = ["language", "diarize", "detect_language", "smart_format", "punctuate", "utterances", "numerals", "profanity_filter", "encoding", "sample_rate", "channels", "keyterm", "keywords", "mip_opt_out"];
 
     public async IAsyncEnumerable<Model> ListModelsAsync([EnumeratorCancellation] CancellationToken ct)
     {
         await Task.CompletedTask;
         if (string.IsNullOrWhiteSpace(credentials.GetApiKey(Id))) yield break;
-        foreach (var (id, type) in new[] { ("aura-2-asteria-en", "speech"), ("aura-2-thalia-en", "speech"), ("nova-3", "transcription"), ("nova-2", "transcription") })
+        foreach (var (id, type) in new[] { (RealtimeSpeechModel, "speech"), ("aura-2-thalia-en", "speech"), ("nova-3", "transcription"), ("nova-2", "transcription") })
         {
             ct.ThrowIfCancellationRequested();
-            yield return new Model { Id = id, Name = id, Type = type, Tags = type == "transcription" ? ["realtime"] : null };
+            yield return new Model { Id = id, Name = id, Type = type, Tags = id == RealtimeSpeechModel ? ["realtime", "realtime-token"]
+                : type == "transcription" ? ["realtime"] : null };
         }
     }
 
@@ -158,7 +160,8 @@ public sealed class DeepgramProvider(IHttpClientFactory clients, IProviderCreden
         var key = RequiredKey(credentials, Id);
         using var client = clients.CreateClient(Id);
         var response = await JsonAsync<JsonElement>(client, HttpMethod.Post, "v1/auth/grant", JsonContent.Create(new { ttl_seconds = ttl }), "Token", key, headers, ct);
-        var url = new UriBuilder(client.BaseAddress!) { Scheme = "wss", Path = "/v1/listen", Query = "model=" + Uri.EscapeDataString(model) };
+        var path = model == RealtimeSpeechModel ? "/v1/speak" : "/v1/listen";
+        var url = new UriBuilder(client.BaseAddress!) { Scheme = "wss", Path = path, Query = "model=" + Uri.EscapeDataString(model) };
         return new() { Token = RealtimeOptions.Required(response, "access_token", key), Url = url.Uri.AbsoluteUri,
             ExpiresAt = DateTimeOffset.UtcNow.AddSeconds(Number(response, "expires_in") ?? ttl).ToUnixTimeSeconds() };
     }

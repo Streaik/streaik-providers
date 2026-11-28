@@ -27,7 +27,8 @@ internal sealed partial class CartesiaProvider(IHttpClientFactory clients, IProv
     internal const string Id = "cartesia";
     private const string Version = "2026-08-14";
     private const string VersionHeader = "Cartesia-Version";
-    private static readonly string[] SpeechModels = ["sonic-3.6", "sonic-3.5", "sonic-3", "sonic-latest"];
+    private const string RealtimeSpeechModel = "sonic-3.6";
+    private static readonly string[] SpeechModels = [RealtimeSpeechModel, "sonic-3.5", "sonic-3", "sonic-latest"];
     private static readonly string[] BatchModels = ["ink-whisper", "ink-whisper-2025-06-04"];
 
     public bool IsSpeechModel(string model) => model.Split('/') is ["tts", var sonic, { Length: > 0 }] && SpeechModels.Contains(sonic);
@@ -60,7 +61,8 @@ internal sealed partial class CartesiaProvider(IHttpClientFactory clients, IProv
         await foreach (var voice in CatalogAsync(client, "voices", ct))
             if (String(voice, "id") is { Length: > 0 } id)
                 foreach (var model in SpeechModels)
-                    yield return Model($"tts/{model}/{id}", $"{model} {String(voice, "name") ?? id}", "speech", ["voice"]);
+                    yield return Model($"tts/{model}/{id}", $"{model} {String(voice, "name") ?? id}", "speech",
+                        model == RealtimeSpeechModel ? ["voice", "realtime", "realtime-token"] : ["voice"]);
         await foreach (var agent in CatalogAsync(client, "v1/agents", ct))
             if (String(agent, "id") is { Length: > 0 } id)
             {
