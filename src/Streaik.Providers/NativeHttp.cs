@@ -7,6 +7,8 @@ namespace Streaik.Providers;
 
 internal static class NativeHttp
 {
+    internal static Action<HttpRequestHeaders> Bearer(string key) => headers => headers.Authorization = new("Bearer", key);
+
     public static async Task<T> GetAsync<T>(HttpClient client, string path, Action<HttpRequestHeaders> authenticate, CancellationToken ct,
         JsonSerializerOptions? json = null)
     {
