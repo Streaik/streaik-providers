@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.DependencyInjection;
 using Streaik.Messages;
@@ -51,7 +52,12 @@ public sealed class AnthropicProvider(IHttpClientFactory clients, IProviderCrede
         while (true)
         {
             var page = await NativeHttp.GetAsync<ModelPage>(client, path, h => Authenticate(h, key, "2023-06-01"), ct, ProviderModelJson.Options);
-            foreach (var model in page.Data) yield return model;
+            foreach (var item in page.Data)
+            {
+                if (item.Deserialize<Model>(ProviderModelJson.Options) is not { } model) continue;
+                model.Created ??= ProviderModelJson.ReadCreated(item);
+                yield return model;
+            }
 
             if (!page.HasMore) yield break;
             if (page.LastId is not { Length: > 0 } cursor || !cursors.Add(cursor))
@@ -63,7 +69,7 @@ public sealed class AnthropicProvider(IHttpClientFactory clients, IProviderCrede
     private string RequireKey() => credentials.GetApiKey(Id) is { } key && !string.IsNullOrWhiteSpace(key)
         ? key : throw new ProviderCredentialException(Id);
 
-    private sealed record ModelPage(List<Model> Data, [property: JsonPropertyName("has_more")] bool HasMore,
+    private sealed record ModelPage(List<JsonElement> Data, [property: JsonPropertyName("has_more")] bool HasMore,
         [property: JsonPropertyName("last_id")] string? LastId);
 
     private static string RequireVersion(MessagesRequest request, IReadOnlyDictionary<string, string> headers)

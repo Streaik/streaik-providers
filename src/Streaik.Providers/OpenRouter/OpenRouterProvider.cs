@@ -95,6 +95,7 @@ public sealed partial class OpenRouterProvider(IHttpClientFactory clients, IProv
                 foreach (var type in ModelTypes(item))
                     if (seen.Add((id, type)))
                         yield return new Model { Id = id, Name = String(item, "name") ?? id, Type = type, Description = String(item, "description"),
+                            Created = ProviderModelJson.ReadCreated(item),
                             ContextWindow = context.ValueKind == JsonValueKind.Number && context.TryGetInt32(out var count) ? count : null,
                             MaxTokens = limit.ValueKind == JsonValueKind.Number && limit.TryGetInt32(out var max) ? max : null };
             }

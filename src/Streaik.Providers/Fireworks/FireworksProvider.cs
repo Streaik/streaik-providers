@@ -153,6 +153,7 @@ public sealed class FireworksProvider(IHttpClientFactory clients, IProviderCrede
                 Id = model,
                 Name = String(entry, "display_name") ?? String(entry, "name") ?? name,
                 Description = String(entry, "description"),
+                Created = ProviderModelJson.ReadCreated(entry),
                 OwnedBy = String(entry, "owned_by") ?? Id,
                 Type = classified,
                 ContextWindow = context.ValueKind == JsonValueKind.Number && context.TryGetInt32(out var size) ? size : null
